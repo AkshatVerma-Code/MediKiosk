@@ -1,0 +1,128 @@
+.greeting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 20px;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow-sm);
+}
+.greetingAvatar {
+  width: 44px;
+  height: 44px;
+  background: var(--green-500);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.greetingHello {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.greetingName {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.header {
+  margin-bottom: 28px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+.consultCard {
+  background: var(--white);
+  border-radius: var(--radius-xl);
+  border: 2px solid var(--border);
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: all var(--transition-normal);
+  position: relative;
+}
+
+.activeCard {
+  border-color: var(--green-300);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+.activeCard:hover {
+  border-color: var(--green-500);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-3px);
+}
+
+.comingSoonCard {
+  opacity: 0.75;
+  cursor: pointer;
+  background: var(--gray-50);
+}
+.comingSoonCard:hover {
+  opacity: 0.85;
+}
+
+.cardIcon {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cardBadge {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+
+.cardTitle {
+  font-size: var(--font-size-xl);
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.cardDesc {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.cardFeatures {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--text-secondary);
+  background: var(--green-50);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-weight: 500;
+}
+.featureDim {
+  background: var(--gray-100);
+  color: var(--gray-400);
+}

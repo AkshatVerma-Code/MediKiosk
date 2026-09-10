@@ -1,0 +1,100 @@
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-above);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 60px;
+}
+
+.inner {
+  max-width: 960px;
+  margin: 0 auto;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.brandDot {
+  width: 10px;
+  height: 10px;
+  background: var(--green-500);
+  border-radius: 50%;
+}
+.brandName {
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--green-600);
+  letter-spacing: -0.3px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.group {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ctrl {
+  background: transparent;
+  border: none;
+  padding: 8px 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.ctrl:hover {
+  background: var(--green-50);
+  color: var(--green-600);
+}
+
+.fontBtn {
+  font-family: var(--font-base);
+  min-width: 44px;
+  justify-content: center;
+}
+.fontBtn:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.langBtn {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--green-500);
+  color: white;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  min-width: 52px;
+  justify-content: center;
+}
+.langBtn:hover {
+  background: var(--green-600);
+  color: white;
+}
+
+.helpBtn {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  gap: 6px;
+}

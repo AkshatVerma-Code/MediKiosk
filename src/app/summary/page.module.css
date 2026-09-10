@@ -1,0 +1,147 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.patientChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--green-100);
+  border-radius: var(--radius-full);
+  padding: 8px 16px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--green-800);
+}
+.patientAvatar {
+  width: 28px; height: 28px;
+  background: var(--green-500);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.loadingCard {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: 60px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  font-size: var(--font-size-lg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.errorCard {
+  background: var(--danger-light);
+  border: 1px solid #FCA5A5;
+  border-radius: var(--radius-md);
+  padding: 32px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.summaryCard {
+  background: var(--white);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.priorityBadge {
+  padding: 16px 24px;
+  font-size: var(--font-size-lg);
+  font-weight: 800;
+  border-bottom: 1px solid;
+  letter-spacing: 0.05em;
+}
+
+.summaryText {
+  padding: 20px 24px;
+  background: var(--green-50);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-size-lg);
+  color: var(--text-primary);
+  line-height: 1.7;
+}
+
+.grid {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.section:last-child { border-bottom: none; padding-bottom: 0; }
+
+.sectionLabel {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+.sectionValue {
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.medRow {
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  padding: 6px 0;
+}
+
+.labRow {
+  display: flex;
+  align-items: center;
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  padding: 6px 0;
+}
+
+.disclaimer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px;
+  background: var(--gray-50);
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}

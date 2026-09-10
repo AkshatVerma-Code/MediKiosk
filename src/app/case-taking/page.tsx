@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import AccessibilityBar from '@/components/AccessibilityBar';
 import RedFlagAlert from '@/components/RedFlagAlert';
@@ -10,7 +10,7 @@ import { detectRedFlags } from '@/lib/redFlagRules';
 import { v4 as uuidv4 } from 'uuid';
 import styles from './page.module.css';
 
-type InputMode = 'idle' | 'listening' | 'processing' | 'asking';
+type InputMode = 'idle' | 'speaking' | 'listening' | 'processing' | 'asking';
 
 interface DynamicQuestion {
   question: string;
@@ -29,51 +29,196 @@ export default function CaseTakingPage() {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [clinicalState, setClinicalState] = useState<ClinicalState>(session.clinicalState);
   const [currentQuestion, setCurrentQuestion] = useState<DynamicQuestion | null>(null);
+  const [lastAnswer, setLastAnswer] = useState('');
   const [questionCount, setQuestionCount] = useState(0);
   const [inputMode, setInputMode] = useState<InputMode>('asking');
   const [textInput, setTextInput] = useState('');
+  const [showTypeInput, setShowTypeInput] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [redFlags, setRedFlags] = useState(session.redFlags);
   const [showRedFlag, setShowRedFlag] = useState(false);
+  const [micHint, setMicHint] = useState<string | null>(null);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
 
-  const chatRef = useRef<HTMLDivElement>(null);
+  // Refs — these hold live/mutable objects that don't need re-renders
+  const messagesRef = useRef<ConversationMessage[]>([]);
+  const voiceEnabledRef = useRef(true);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const messagesRef = useRef<ConversationMessage[]>([]);
+  const skipProcessRef = useRef(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const silenceFallbackTimerRef = useRef<number | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speakResolveRef = useRef<(() => void) | null>(null);
   const consecutiveFailuresRef = useRef(0);
 
-  // Keep ref in sync (avoids stale closures)
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { voiceEnabledRef.current = voiceEnabled; }, [voiceEnabled]);
 
-  const scrollBottom = useCallback(() => {
-    setTimeout(() => chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' }), 100);
-  }, []);
-
-  const addAIMessage = useCallback((text: string, options?: string[]) => {
+  function addAIMessage(text: string, options?: string[]) {
     setMessages(prev => {
-      // Prevent adding the exact same question twice in a row (stops infinite loop bug)
       const lastMsg = prev[prev.length - 1];
-      if (lastMsg && lastMsg.speaker === 'AI' && lastMsg.text === text) {
-        return prev;
-      }
+      if (lastMsg && lastMsg.speaker === 'AI' && lastMsg.text === text) return prev;
       const msg: ConversationMessage = { id: uuidv4(), speaker: 'AI', text, timestamp: new Date().toISOString(), options };
       return [...prev, msg];
     });
-    scrollBottom();
-  }, [scrollBottom]);
+  }
 
-  const addPatientMessage = useCallback((text: string) => {
+  function addPatientMessage(text: string) {
     const msg: ConversationMessage = { id: uuidv4(), speaker: 'PATIENT', text, timestamp: new Date().toISOString() };
     setMessages(prev => [...prev, msg]);
-    scrollBottom();
-  }, [scrollBottom]);
+  }
 
-  // ─── Fetch next question from Gemini ─────────────────────────────────────
-  const fetchNextQuestion = useCallback(async (
-    state: ClinicalState,
-    msgs: ConversationMessage[],
-    count: number
-  ) => {
+  // ─── Text-to-speech playback (Sarvam) ─────────────────────────────────────
+  function interruptSpeech() {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    if (speakResolveRef.current) {
+      const resolve = speakResolveRef.current;
+      speakResolveRef.current = null;
+      resolve();
+    }
+  }
+
+  async function speak(text: string): Promise<void> {
+    if (!voiceEnabledRef.current || !text) return;
+    setInputMode('speaking');
+    try {
+      const resp = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, lang }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.audio_base64) {
+          const audio = new Audio(`data:audio/wav;base64,${data.audio_base64}`);
+          currentAudioRef.current = audio;
+          await new Promise<void>((resolve) => {
+            speakResolveRef.current = resolve;
+            audio.onended = () => { speakResolveRef.current = null; resolve(); };
+            audio.onerror = () => { speakResolveRef.current = null; resolve(); };
+            audio.play().catch(() => { speakResolveRef.current = null; resolve(); });
+          });
+          currentAudioRef.current = null;
+        }
+      }
+    } catch {
+      // Voice playback is best-effort — the on-screen caption + tap options still work.
+    }
+  }
+
+  // ─── Silence detection while the mic is listening ─────────────────────────
+  function cleanupSilenceWatch() {
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    if (silenceFallbackTimerRef.current) { window.clearTimeout(silenceFallbackTimerRef.current); silenceFallbackTimerRef.current = null; }
+    if (audioCtxRef.current) { audioCtxRef.current.close().catch(() => {}); audioCtxRef.current = null; }
+  }
+
+  function stopListening(discard = false) {
+    skipProcessRef.current = discard;
+    cleanupSilenceWatch();
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      setInputMode(discard ? 'idle' : 'processing');
+      recorder.stop();
+    }
+  }
+
+  function startSilenceWatch(stream: MediaStream) {
+    try {
+      const AudioContextClass = window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioContextClass();
+      audioCtxRef.current = ctx;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const startedAt = Date.now();
+      let silenceStart: number | null = null;
+      const THRESHOLD = 6;      // RMS amplitude below this counts as silence
+      const MIN_MS = 900;       // always record at least this long
+      const SILENCE_MS = 1700;  // stop after this much continuous silence
+      const MAX_MS = 20000;     // hard cap so we never listen forever
+
+      const tick = () => {
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) { const v = data[i] - 128; sum += v * v; }
+        const rms = Math.sqrt(sum / data.length);
+        const elapsed = Date.now() - startedAt;
+
+        if (rms < THRESHOLD) {
+          if (silenceStart === null) silenceStart = Date.now();
+          if (elapsed > MIN_MS && Date.now() - silenceStart > SILENCE_MS) { stopListening(); return; }
+        } else {
+          silenceStart = null;
+        }
+        if (elapsed > MAX_MS) { stopListening(); return; }
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    } catch {
+      // Silence detection unsupported on this browser — fall back to a fixed max duration.
+      silenceFallbackTimerRef.current = window.setTimeout(() => stopListening(), 8000);
+    }
+  }
+
+  async function startListening() {
+    if (inputMode === 'processing' || inputMode === 'asking') return;
+    interruptSpeech();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMicHint(null);
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      skipProcessRef.current = false;
+      recorder.ondataavailable = e => audioChunksRef.current.push(e.data);
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(tr => tr.stop());
+        cleanupSilenceWatch();
+        if (skipProcessRef.current) { skipProcessRef.current = false; return; }
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await processVoice(blob);
+      };
+      recorder.start();
+      setInputMode('listening');
+      startSilenceWatch(stream);
+    } catch {
+      setInputMode('idle');
+      setMicHint(lang === 'hi'
+        ? 'माइक उपलब्ध नहीं। कृपया नीचे विकल्प चुनें या टाइप करें।'
+        : 'Microphone unavailable. Please tap an option below or type your answer.');
+    }
+  }
+
+  async function processVoice(blob: Blob) {
+    try {
+      const formData = new FormData();
+      formData.append('audio', blob, 'recording.webm');
+      formData.append('lang', lang);
+      const resp = await fetch('/api/stt', { method: 'POST', body: formData });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.transcript?.trim()) { await processAnswer(data.transcript); return; }
+      }
+    } catch {
+      // fall through to retry prompt below
+    }
+    setInputMode('idle');
+    setMicHint(lang === 'hi'
+      ? 'समझ नहीं आया। कृपया फिर से बोलें या नीचे विकल्प चुनें।'
+      : 'Sorry, I could not understand that. Please try again or tap an option below.');
+  }
+
+  // ─── Fetch next question from Gemini, then speak it, then auto-listen ────
+  async function fetchNextQuestion(state: ClinicalState, msgs: ConversationMessage[], count: number) {
     setInputMode('asking');
     try {
       const resp = await fetch('/api/next-question', {
@@ -89,71 +234,85 @@ export default function CaseTakingPage() {
 
       if (!resp.ok) throw new Error('API failed');
       const q: DynamicQuestion = await resp.json();
+      consecutiveFailuresRef.current = 0;
 
       if (q.is_complete || count >= MAX_QUESTIONS) {
-        // Done
-        setIsComplete(true);
-        addAIMessage(
-          lang === 'hi'
-            ? '🙏 धन्यवाद! आपकी सभी जानकारी ले ली गई है। अब आप अपने पिछले दस्तावेज़ अपलोड कर सकते हैं।'
-            : '🙏 Thank you! I have collected your history. You may now upload any previous medical documents.'
-        );
-        setInputMode('idle');
+        await finishInterview();
         return;
       }
 
       setCurrentQuestion(q);
       addAIMessage(q.question, q.options);
-      setInputMode('idle');
-      consecutiveFailuresRef.current = 0;
+      await speak(q.question);
+      await startListening();
     } catch {
-      // If the API keeps failing, don't loop forever — wrap up gracefully instead
       consecutiveFailuresRef.current += 1;
       if (consecutiveFailuresRef.current >= 3) {
-        setIsComplete(true);
-        addAIMessage(
-          lang === 'hi'
-            ? '🙏 धन्यवाद! आपकी जानकारी ले ली गई है। अब आप अपने पिछले दस्तावेज़ अपलोड कर सकते हैं।'
-            : '🙏 Thank you! I have collected your history so far. You may now upload any previous medical documents.'
-        );
-        setInputMode('idle');
+        await finishInterview();
         return;
       }
-
       // Fallback question — pick based on what's still missing so we never re-ask
       // the chief complaint once it's already known (this used to cause an
       // infinite "same question" loop whenever the next-question API failed).
       const fallback = buildFallbackQuestion(state, lang);
       setCurrentQuestion(fallback);
       addAIMessage(fallback.question, fallback.options);
-      setInputMode('idle');
+      await speak(fallback.question);
+      await startListening();
     }
-  }, [lang, addAIMessage]);
+  }
+
+  async function finishInterview() {
+    setIsComplete(true);
+    setCurrentQuestion(null);
+    const closingText = lang === 'hi'
+      ? '🙏 धन्यवाद! आपकी सभी जानकारी ले ली गई है। अब आप अपने पिछले दस्तावेज़ अपलोड कर सकते हैं।'
+      : '🙏 Thank you! I have collected your history. You may now upload any previous medical documents.';
+    addAIMessage(closingText);
+    setInputMode('idle');
+    await speak(closingText);
+  }
 
   // ─── Initial greeting + first question ───────────────────────────────────
   useEffect(() => {
     if (messages.length === 0) {
       const greeting = lang === 'hi'
-        ? `नमस्ते${session.patient ? ` ${session.patient.name.split(' ')[0]}` : ''}! मैं आपका AI सहायक हूँ। डॉक्टर के लिए आपकी जानकारी तैयार करूँगा।`
-        : `Hello${session.patient ? ` ${session.patient.name.split(' ')[0]}` : ''}! I'm your AI assistant. I'll prepare your history for the doctor.`;
+        ? `नमस्ते${session.patient ? ` ${session.patient.name.split(' ')[0]}` : ''}! मैं आपकी AI सहायक हूँ। बताइए, मैं आपकी क्या मदद कर सकती हूँ?`
+        : `Hello${session.patient ? ` ${session.patient.name.split(' ')[0]}` : ''}! I'm your AI assistant. Tell me, how can I help you today?`;
 
       const greetMsg: ConversationMessage = { id: uuidv4(), speaker: 'AI', text: greeting, timestamp: new Date().toISOString() };
       setMessages([greetMsg]);
 
-      setTimeout(() => fetchNextQuestion(clinicalState, [greetMsg], 0), 800);
+      (async () => {
+        await speak(greeting);
+        await fetchNextQuestion(clinicalState, [greetMsg], 0);
+      })();
     }
-  }, []); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ─── Process patient answer ───────────────────────────────────────────────
-  const processAnswer = useCallback(async (answer: string) => {
-    if (!answer.trim() || !currentQuestion) return;
+  // Stop any audio/mic activity if the user navigates away mid-conversation
+  useEffect(() => {
+    return () => {
+      interruptSpeech();
+      stopListening(true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // ─── Process patient answer (from voice, tap, or typed text) ─────────────
+  async function processAnswer(answer: string) {
+    if (!answer.trim() || !currentQuestion || inputMode === 'processing' || inputMode === 'asking') return;
+
+    interruptSpeech();
     addPatientMessage(answer);
+    setLastAnswer(answer);
+    setMicHint(null);
     setInputMode('processing');
     setTextInput('');
+    setShowTypeInput(false);
 
     try {
-      // Extract structured data from answer via Gemini
       const resp = await fetch('/api/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -177,28 +336,24 @@ export default function CaseTakingPage() {
 
       setClinicalState(newState);
 
-      // Check red flags immediately
       const flags = detectRedFlags(newState, lang);
       if (flags.length > 0 && flags.length > redFlags.length) {
         setRedFlags(flags);
         setShowRedFlag(true);
       }
 
-      // Save state to session
       const updSession = { ...session, clinicalState: newState, messages: messagesRef.current, redFlags: flags };
       saveSession(updSession);
 
-      // Fetch next dynamic question
       const newCount = questionCount + 1;
       setQuestionCount(newCount);
       await fetchNextQuestion(newState, messagesRef.current, newCount);
     } catch {
-      // Fallback without extraction
       const newCount = questionCount + 1;
       setQuestionCount(newCount);
       await fetchNextQuestion(clinicalState, messagesRef.current, newCount);
     }
-  }, [currentQuestion, clinicalState, lang, redFlags, questionCount, session, fetchNextQuestion, addPatientMessage]);
+  }
 
   // ─── Fallback: pick the next question locally when the AI API fails ──────
   // Walks the clinical state and asks about the first field that's still
@@ -256,62 +411,46 @@ export default function CaseTakingPage() {
     return s;
   }
 
-  // ─── Voice recording ──────────────────────────────────────────────────────
-  const startListening = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
-      recorder.ondataavailable = e => audioChunksRef.current.push(e.data);
-      recorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await processVoice(blob);
-      };
-      recorder.start();
-      setInputMode('listening');
-    } catch {
-      addAIMessage(lang === 'hi'
-        ? 'माइक उपलब्ध नहीं। कृपया विकल्प चुनें या टाइप करें।'
-        : 'Microphone unavailable. Please tap an option or type your answer.');
-    }
-  };
+  // ─── UI event handlers ────────────────────────────────────────────────────
+  function handleMicTap() {
+    if (inputMode === 'listening') { stopListening(false); return; }
+    if (inputMode === 'speaking') { interruptSpeech(); startListening(); return; }
+    if (inputMode === 'idle') { startListening(); return; }
+  }
 
-  const stopListening = () => {
-    mediaRecorderRef.current?.stop();
-    setInputMode('processing');
-  };
+  function handleOptionTap(opt: string) {
+    if (inputMode === 'processing' || inputMode === 'asking') return;
+    if (inputMode === 'listening') stopListening(true);
+    else if (inputMode === 'speaking') interruptSpeech();
+    processAnswer(opt);
+  }
 
-  const processVoice = async (blob: Blob) => {
-    try {
-      const formData = new FormData();
-      formData.append('audio', blob, 'recording.webm');
-      formData.append('lang', lang);
-      const resp = await fetch('/api/stt', { method: 'POST', body: formData });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.transcript?.trim()) { await processAnswer(data.transcript); return; }
-      }
-    } catch {}
-    setInputMode('idle');
-    addAIMessage(lang === 'hi'
-      ? 'समझ नहीं आया। फिर बोलें या विकल्प चुनें।'
-      : 'Could not understand. Please speak again or select an option.');
-  };
+  function handleTypedSubmit() {
+    if (!textInput.trim()) return;
+    if (inputMode === 'listening') stopListening(true);
+    else if (inputMode === 'speaking') interruptSpeech();
+    processAnswer(textInput);
+  }
 
-  const handleContinue = () => {
+  function handleContinue() {
     saveSession({ ...session, clinicalState, messages, redFlags });
     router.push('/upload');
-  };
+  }
 
-  const updateSession = (updates: Partial<typeof session>) => {
+  function updateSession(updates: Partial<typeof session>) {
     const updated = { ...session, ...updates };
     setSession(updated);
     saveSession(updated);
-  };
+  }
 
   const progress = Math.min(Math.round((questionCount / MAX_QUESTIONS) * 100), 100);
+
+  const statusLabel =
+    inputMode === 'speaking' ? t(lang, 'case_speaking') :
+    inputMode === 'listening' ? t(lang, 'case_listening') :
+    inputMode === 'processing' ? t(lang, 'case_processing') :
+    inputMode === 'asking' ? t(lang, 'case_thinking') :
+    !isComplete ? t(lang, 'case_tap_to_speak') : '';
 
   return (
     <div className="page-container">
@@ -332,6 +471,14 @@ export default function CaseTakingPage() {
             )}
           </div>
           <div className={styles.progressWrap}>
+            <button
+              className={styles.voiceToggleBtn}
+              onClick={() => setVoiceEnabled(v => !v)}
+              aria-label={voiceEnabled ? 'Mute AI voice' : 'Unmute AI voice'}
+              title={voiceEnabled ? (lang === 'hi' ? 'AI आवाज़ बंद करें' : 'Mute AI voice') : (lang === 'hi' ? 'AI आवाज़ चालू करें' : 'Unmute AI voice')}
+            >
+              {voiceEnabled ? '🔊' : '🔇'}
+            </button>
             <div className={styles.progressLabel}>{questionCount} / {MAX_QUESTIONS}</div>
             <div className="progress-bar-track" style={{ width: 120 }}>
               <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
@@ -346,109 +493,104 @@ export default function CaseTakingPage() {
           </div>
         )}
 
-        {/* Chat */}
-        <div className={styles.chatContainer} ref={chatRef}>
-          {messages.map((msg, i) => (
-            <div
-              key={msg.id}
-              className={`${styles.bubble} ${msg.speaker === 'AI' ? styles.aiBubble : styles.patientBubble} animate-fade-in`}
-              style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
-            >
-              {msg.speaker === 'AI' && <div className={styles.aiAvatar}>AI</div>}
-              <div className={styles.bubbleContent}>
-                <p className={styles.bubbleText}>{msg.text}</p>
-                {/* Tap options — only on the LAST AI message when idle */}
-                {msg.speaker === 'AI' && msg.options && msg.options.length > 0
-                  && !isComplete && i === messages.length - 1 && inputMode === 'idle' && (
-                  <div className={styles.options}>
-                    {msg.options.map((opt) => (
-                      <button
-                        key={opt}
-                        className={styles.optionBtn}
-                        onClick={() => processAnswer(opt)}
-                        disabled={inputMode !== 'idle'}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                )}
+        {/* Voice-first conversation stage */}
+        <div className={styles.stage}>
+          {currentQuestion && !isComplete && (
+            <p className={styles.questionCaption}>{currentQuestion.question}</p>
+          )}
+          {isComplete && (
+            <p className={styles.questionCaption}>
+              {lang === 'hi' ? '🙏 धन्यवाद! आपकी जानकारी पूरी हो गई है।' : '🙏 Thank you! Your history is complete.'}
+            </p>
+          )}
+
+          <div className={styles.avatarWrap}>
+            <div className={`${styles.avatarRing} ${styles['state_' + inputMode]}`}>
+              <div className={styles.avatarCore}>
+                <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="white" opacity="0.95" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                </svg>
               </div>
-              {msg.speaker === 'PATIENT' && (
-                <div className={styles.patientAvatar}>{session.patient?.name.charAt(0) || 'P'}</div>
+              {(inputMode === 'processing' || inputMode === 'asking') && (
+                <div className={styles.avatarSpinner}><div className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} /></div>
               )}
             </div>
-          ))}
+          </div>
 
-          {/* Thinking indicator */}
-          {(inputMode === 'processing' || inputMode === 'asking') && (
-            <div className={`${styles.bubble} ${styles.aiBubble}`}>
-              <div className={styles.aiAvatar}>AI</div>
-              <div className={styles.bubbleContent}>
-                <div className={styles.thinkingDots}><span /><span /><span /></div>
-              </div>
+          {micHint ? (
+            <p className={styles.micHintText}>{micHint}</p>
+          ) : (
+            <p className={styles.statusLabel}>{statusLabel}</p>
+          )}
+
+          {lastAnswer && !isComplete && (
+            <p className={styles.answerCaption}>“{lastAnswer}”</p>
+          )}
+
+          {/* MCQ tap options */}
+          {!isComplete && currentQuestion && currentQuestion.options?.length > 0 && (
+            <div className={styles.mcqGrid}>
+              {currentQuestion.options.map(opt => (
+                <button
+                  key={opt}
+                  className={styles.mcqBtn}
+                  onClick={() => handleOptionTap(opt)}
+                  disabled={inputMode === 'processing' || inputMode === 'asking'}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Mic button */}
+          {!isComplete && (
+            <div className={styles.micColumn}>
+              <button
+                id="case-mic-btn"
+                className={`${styles.micBtnLarge} ${inputMode === 'listening' ? styles.micBtnActive : ''}`}
+                onClick={handleMicTap}
+                disabled={inputMode === 'processing' || inputMode === 'asking'}
+                aria-label={inputMode === 'listening' ? 'Stop recording' : 'Start voice input'}
+              >
+                {inputMode === 'listening' && <div className={styles.rippleLarge} />}
+                {inputMode === 'listening' ? (
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" rx="2" fill="white" /></svg>
+                ) : (
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="white" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                )}
+              </button>
+
+              <button className={styles.typeInsteadBtn} onClick={() => setShowTypeInput(v => !v)}>
+                ⌨ {t(lang, 'case_type_instead')}
+              </button>
+
+              {showTypeInput && (
+                <div className={styles.typeInputRow}>
+                  <input
+                    id="case-text-input"
+                    className="input"
+                    type="text"
+                    placeholder={t(lang, 'case_type_placeholder')}
+                    value={textInput}
+                    onChange={e => setTextInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleTypedSubmit()}
+                    autoFocus
+                  />
+                  <button id="case-send-btn" className="btn btn-primary" onClick={handleTypedSubmit} disabled={!textInput.trim()}>
+                    {t(lang, 'case_send')}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Input area */}
-        {!isComplete ? (
-          <div className={styles.inputArea}>
-            {/* Mic */}
-            <button
-              id="case-mic-btn"
-              className={`${styles.micBtn} ${inputMode === 'listening' ? styles.micActive : ''}`}
-              onClick={inputMode === 'listening' ? stopListening : startListening}
-              disabled={inputMode === 'processing' || inputMode === 'asking'}
-              aria-label={inputMode === 'listening' ? 'Stop recording' : 'Start voice input'}
-            >
-              {inputMode === 'listening' ? (
-                <><div className={styles.ripple} />
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" rx="2" fill="white" /></svg>
-                </>
-              ) : (
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="white"/>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              )}
-            </button>
-
-            <div className={styles.inputDivider}><span>{t(lang, 'case_or')}</span></div>
-
-            {/* Text input */}
-            <div className={styles.textInputWrap}>
-              <input
-                id="case-text-input"
-                className={`input ${styles.textInput}`}
-                type="text"
-                placeholder={t(lang, 'case_type_placeholder')}
-                value={textInput}
-                onChange={e => setTextInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && textInput.trim() && processAnswer(textInput)}
-                disabled={inputMode !== 'idle'}
-              />
-              <button
-                id="case-send-btn"
-                className={`btn btn-primary ${styles.sendBtn}`}
-                onClick={() => textInput.trim() && processAnswer(textInput)}
-                disabled={inputMode !== 'idle' || !textInput.trim()}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-            </div>
-
-            {inputMode !== 'idle' && (
-              <div className={styles.statusBadge}>
-                {inputMode === 'listening' && <><div className={styles.recordingDot} />{t(lang, 'case_listening')}</>}
-                {inputMode === 'processing' && <><div className="spinner" style={{ width: 16, height: 16 }} />{t(lang, 'case_processing')}</>}
-                {inputMode === 'asking' && <><div className="spinner" style={{ width: 16, height: 16 }} />{t(lang, 'case_thinking')}</>}
-              </div>
-            )}
-          </div>
-        ) : (
+        {isComplete && (
           <div className={styles.completeBar}>
             <div className={styles.completeMsg}><span>✅</span><span>{lang === 'hi' ? 'इतिहास पूर्ण हुआ' : 'History complete'}</span></div>
             <button id="case-continue-btn" className="btn btn-primary btn-lg" onClick={handleContinue}>

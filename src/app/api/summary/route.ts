@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
 
 export async function POST(req: NextRequest) {
   try {

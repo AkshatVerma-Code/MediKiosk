@@ -76,6 +76,11 @@ export interface Translations {
   case_skip: string;
   case_progress: string;
   case_thinking: string;
+  case_speaking: string;
+  case_tap_to_speak: string;
+  case_tap_to_stop: string;
+  case_greeting: string;
+  case_type_instead: string;
 
   // Red flag
   redflag_title: string;
@@ -191,6 +196,11 @@ const hi: Translations = {
   case_skip: 'छोड़ें',
   case_progress: 'प्रश्न {{current}} / {{total}}',
   case_thinking: 'सोच रहा हूँ...',
+  case_speaking: 'बोल रहा हूँ...',
+  case_tap_to_speak: 'बोलने के लिए दबाएं',
+  case_tap_to_stop: 'रोकने के लिए दबाएं',
+  case_greeting: 'नमस्ते! मैं आपकी सहायक हूँ। बताइए, आज आपको क्या तकलीफ है?',
+  case_type_instead: 'टाइप करें',
 
   redflag_title: '⚠️ तत्काल चिकित्सा ध्यान आवश्यक',
   redflag_body: 'आपके लक्षण तत्काल चिकित्सा मूल्यांकन की आवश्यकता हो सकती है।',
@@ -300,6 +310,11 @@ const en: Translations = {
   case_skip: 'Skip',
   case_progress: 'Question {{current}} of {{total}}',
   case_thinking: 'Thinking...',
+  case_speaking: 'Speaking...',
+  case_tap_to_speak: 'Tap to speak',
+  case_tap_to_stop: 'Tap to stop',
+  case_greeting: 'Namaste! I am your AI assistant. So, tell me, what problem are you facing today?',
+  case_type_instead: 'Type instead',
 
   redflag_title: '⚠️ Urgent Medical Attention Required',
   redflag_body: 'Your symptoms may require immediate medical evaluation.',

@@ -28,108 +28,159 @@
 }
 .progressWrap {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
+  gap: 12px;
 }
 .progressLabel {
   font-size: 13px;
   font-weight: 600;
   color: var(--green-600);
 }
-
-/* Chat */
-.chatContainer {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-width: 800px;
-  width: 100%;
-  margin: 0 auto;
-  align-self: center;
-}
-
-.bubble {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  max-width: 85%;
-}
-.aiBubble {
-  align-self: flex-start;
-  flex-direction: row;
-}
-.patientBubble {
-  align-self: flex-end;
-  flex-direction: row-reverse;
-}
-
-.aiAvatar {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, var(--green-500), var(--green-600));
+.voiceToggleBtn {
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 13px;
-  font-weight: 800;
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(45,122,58,0.3);
-}
-.patientAvatar {
-  width: 40px;
-  height: 40px;
-  background: var(--gray-200);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--gray-600);
-  font-size: 16px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.bubbleContent {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.bubbleText {
-  background: var(--white);
   border: 1px solid var(--border);
-  border-radius: 18px 18px 18px 4px;
-  padding: 14px 18px;
-  font-size: var(--font-size-base);
-  color: var(--text-primary);
-  line-height: 1.6;
-  box-shadow: var(--shadow-sm);
+  background: var(--white);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
 }
-.patientBubble .bubbleText {
-  background: var(--green-500);
-  color: white;
-  border-color: transparent;
-  border-radius: 18px 18px 4px 18px;
+.voiceToggleBtn:hover {
+  background: var(--green-50);
+  border-color: var(--green-300);
 }
 
-/* Option buttons (tap answers) */
-.options {
+/* ─── Voice-first conversation stage ─────────────────────────────────────── */
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px;
+  overflow-y: auto;
+  text-align: center;
+}
+
+.questionCaption {
+  max-width: 620px;
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.answerCaption {
+  max-width: 560px;
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.statusLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--green-600);
+  min-height: 20px;
+}
+.micHintText {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--danger);
+  max-width: 520px;
+  min-height: 20px;
+}
+
+/* Avatar circle — the "AI is here" focal point */
+.avatarWrap {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatarRing {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--green-500), var(--green-600));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 32px rgba(45, 122, 58, 0.35);
+  transition: background var(--transition-normal), box-shadow var(--transition-normal);
+}
+.avatarCore {
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatarSpinner {
+  position: absolute;
+  inset: -10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatarSpinner .spinner {
+  width: 100%;
+  height: 100%;
+  border-color: rgba(45, 122, 58, 0.15);
+  border-top-color: var(--green-500);
+}
+
+/* State-driven animations on the avatar ring */
+.state_idle {
+  animation: avatar-breathe 3.2s ease-in-out infinite;
+}
+.state_speaking {
+  animation: avatar-speak 0.9s ease-in-out infinite;
+}
+.state_listening {
+  background: linear-gradient(135deg, var(--danger), #b91c1c);
+  animation: avatar-listen 1.2s ease-in-out infinite;
+}
+.state_processing,
+.state_asking {
+  opacity: 0.85;
+}
+
+@keyframes avatar-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.035); }
+}
+@keyframes avatar-speak {
+  0%, 100% { box-shadow: 0 8px 32px rgba(45, 122, 58, 0.35), 0 0 0 0 rgba(45, 122, 58, 0.35); }
+  50%      { box-shadow: 0 8px 32px rgba(45, 122, 58, 0.45), 0 0 0 16px rgba(45, 122, 58, 0); }
+}
+@keyframes avatar-listen {
+  0%, 100% { box-shadow: 0 8px 32px rgba(220, 38, 38, 0.35), 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  50%      { box-shadow: 0 8px 32px rgba(220, 38, 38, 0.5), 0 0 0 16px rgba(220, 38, 38, 0); }
+}
+
+/* MCQ tap options — arranged like the sketch, wraps as needed */
+.mcqGrid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  max-width: 480px;
+  justify-content: center;
+  gap: 10px;
+  max-width: 680px;
 }
-.optionBtn {
+.mcqBtn {
   background: var(--white);
   border: 2px solid var(--green-300);
-  border-radius: var(--radius-md);
-  padding: 10px 18px;
+  border-radius: var(--radius-full);
+  padding: 12px 22px;
   font-size: var(--font-size-base);
   font-family: var(--font-base);
   font-weight: 600;
@@ -137,60 +188,30 @@
   cursor: pointer;
   transition: all var(--transition-fast);
 }
-.optionBtn:hover:not(:disabled) {
+.mcqBtn:hover:not(:disabled) {
   background: var(--green-500);
   color: white;
   border-color: var(--green-500);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
 }
-.optionBtn:disabled {
+.mcqBtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* Thinking dots */
-.thinkingDots {
+/* Mic button + secondary "type instead" fallback */
+.micColumn {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 5px;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 16px 20px;
-  box-shadow: var(--shadow-sm);
-}
-.thinkingDots span {
-  width: 8px; height: 8px;
-  background: var(--green-400);
-  border-radius: 50%;
-  animation: pulse 1.2s ease infinite;
-}
-.thinkingDots span:nth-child(2) { animation-delay: 0.2s; }
-.thinkingDots span:nth-child(3) { animation-delay: 0.4s; }
-
-/* Input area */
-.inputArea {
-  background: var(--white);
-  border-top: 1px solid var(--border);
-  padding: 16px 24px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  max-width: 800px;
-  width: 100%;
-  margin: 0 auto;
-  align-self: center;
-  position: sticky;
-  bottom: 0;
+  gap: 10px;
+  margin-top: 4px;
 }
 
-/* Mic button */
-.micBtn {
-  width: 64px;
-  height: 64px;
+.micBtnLarge {
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   background: var(--green-500);
   border: none;
@@ -199,72 +220,52 @@
   justify-content: center;
   cursor: pointer;
   transition: all var(--transition-normal);
-  flex-shrink: 0;
   position: relative;
-  box-shadow: 0 4px 16px rgba(45,122,58,0.35);
+  box-shadow: 0 4px 16px rgba(45, 122, 58, 0.35);
 }
-.micBtn:hover {
+.micBtnLarge:hover:not(:disabled) {
   background: var(--green-600);
   transform: scale(1.05);
 }
-.micBtn:disabled {
+.micBtnLarge:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.micActive {
+.micBtnActive {
   background: var(--danger) !important;
-  box-shadow: 0 4px 16px rgba(220,38,38,0.4) !important;
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.4) !important;
   animation: pulse-red 1.5s infinite;
 }
-@keyframes pulse-red {
-  0%, 100% { box-shadow: 0 4px 16px rgba(220,38,38,0.4); }
-  50%       { box-shadow: 0 4px 32px rgba(220,38,38,0.7); }
-}
-
-.ripple {
+.rippleLarge {
   position: absolute;
-  inset: -6px;
+  inset: -8px;
   border-radius: 50%;
-  border: 2px solid rgba(220,38,38,0.4);
+  border: 2px solid rgba(220, 38, 38, 0.4);
   animation: ripple 1.2s ease infinite;
 }
 
-.inputDivider {
-  font-size: 14px;
-  color: var(--gray-400);
-  flex-shrink: 0;
-}
-
-.textInputWrap {
-  flex: 1;
-  display: flex;
-  gap: 8px;
-  min-width: 200px;
-}
-.textInput {
-  flex: 1;
-  min-height: 52px;
-}
-.sendBtn {
-  min-height: 52px;
-  padding: 0 20px;
-  flex-shrink: 0;
-}
-
-.statusBadge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.typeInsteadBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
   font-size: 14px;
   font-weight: 600;
-  color: var(--green-600);
-  width: 100%;
+  cursor: pointer;
+  padding: 4px 8px;
+  text-decoration: underline;
 }
-.recordingDot {
-  width: 10px; height: 10px;
-  background: var(--danger);
-  border-radius: 50%;
-  animation: pulse 1s ease infinite;
+.typeInsteadBtn:hover {
+  color: var(--green-600);
+}
+
+.typeInputRow {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+}
+.typeInputRow .input {
+  flex: 1;
 }
 
 /* Complete bar */

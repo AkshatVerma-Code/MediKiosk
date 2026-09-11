@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AccessibilityBar from '@/components/AccessibilityBar';
-import { loadSession, saveSession } from '@/lib/store';
+import { loadSession, saveSession, defaultClinicalState } from '@/lib/store';
 import { t } from '@/lib/translations';
 import styles from './page.module.css';
 
@@ -20,7 +20,13 @@ export default function SelectPage() {
   };
 
   const handleGeneral = () => {
-    updateSession({ consultationType: 'general' });
+    updateSession({
+      consultationType: 'general',
+      clinicalState: { ...defaultClinicalState },
+      messages: [],
+      redFlags: [],
+      summary: null,
+    });
     router.push('/case-taking');
   };
 

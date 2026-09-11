@@ -4,13 +4,26 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import AccessibilityBar from '@/components/AccessibilityBar';
 import RedFlagAlert from '@/components/RedFlagAlert';
-import { loadSession, saveSession, ConversationMessage, ClinicalState } from '@/lib/store';
+import { loadSession, saveSession, ConversationMessage, ClinicalState, defaultClinicalState } from '@/lib/store';
 import { t } from '@/lib/translations';
 import { detectRedFlags } from '@/lib/redFlagRules';
+import { getDiseaseSpecificQuestion, calculateScaledSeverity, SeverityLevel } from '@/lib/questionEngine';
 import { v4 as uuidv4 } from 'uuid';
 import styles from './page.module.css';
 
 type InputMode = 'idle' | 'speaking' | 'listening' | 'processing' | 'asking';
+
+interface BrowserSpeechRecognition {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort?: () => void;
+}
 
 interface DynamicQuestion {
   question: string;
@@ -19,7 +32,7 @@ interface DynamicQuestion {
   is_complete: boolean;
 }
 
-const MAX_QUESTIONS = 12;
+const MAX_QUESTIONS = 6;
 
 export default function CaseTakingPage() {
   const router = useRouter();
@@ -28,10 +41,12 @@ export default function CaseTakingPage() {
 
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [clinicalState, setClinicalState] = useState<ClinicalState>(session.clinicalState);
-  const [currentQuestion, setCurrentQuestion] = useState<DynamicQuestion | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<DynamicQuestion | null>(() =>
+    getDiseaseSpecificQuestion(session.clinicalState || defaultClinicalState, 0, session.language || 'hi')
+  );
   const [lastAnswer, setLastAnswer] = useState('');
   const [questionCount, setQuestionCount] = useState(0);
-  const [inputMode, setInputMode] = useState<InputMode>('asking');
+  const [inputMode, setInputMode] = useState<InputMode>('idle');
   const [textInput, setTextInput] = useState('');
   const [showTypeInput, setShowTypeInput] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
@@ -39,11 +54,15 @@ export default function CaseTakingPage() {
   const [showRedFlag, setShowRedFlag] = useState(false);
   const [micHint, setMicHint] = useState<string | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [generatedReport, setGeneratedReport] = useState<Record<string, any> | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [severityLevel, setSeverityLevel] = useState<SeverityLevel>('MILD');
 
   // Refs — these hold live/mutable objects that don't need re-renders
   const messagesRef = useRef<ConversationMessage[]>([]);
   const voiceEnabledRef = useRef(true);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const speechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const skipProcessRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -52,6 +71,10 @@ export default function CaseTakingPage() {
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const speakResolveRef = useRef<(() => void) | null>(null);
   const consecutiveFailuresRef = useRef(0);
+  const isInitializedRef = useRef(false);
+  const isProcessingAnswerRef = useRef(false);
+  const currentSpeechIdRef = useRef(0);
+  const ttsAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { voiceEnabledRef.current = voiceEnabled; }, [voiceEnabled]);
@@ -72,8 +95,16 @@ export default function CaseTakingPage() {
 
   // ─── Text-to-speech playback (Sarvam) ─────────────────────────────────────
   function interruptSpeech() {
+    currentSpeechIdRef.current += 1;
+    if (ttsAbortRef.current) {
+      try { ttsAbortRef.current.abort(); } catch {}
+      ttsAbortRef.current = null;
+    }
     if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      } catch {}
       currentAudioRef.current = null;
     }
     if (speakResolveRef.current) {
@@ -85,25 +116,48 @@ export default function CaseTakingPage() {
 
   async function speak(text: string): Promise<void> {
     if (!voiceEnabledRef.current || !text) return;
+    interruptSpeech();
+
+    const speechId = ++currentSpeechIdRef.current;
+    const abortController = new AbortController();
+    ttsAbortRef.current = abortController;
+
     setInputMode('speaking');
     try {
       const resp = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, lang }),
+        signal: abortController.signal,
       });
+
+      if (speechId !== currentSpeechIdRef.current) return;
+
       if (resp.ok) {
         const data = await resp.json();
+        if (speechId !== currentSpeechIdRef.current) return;
+
         if (data.audio_base64) {
           const audio = new Audio(`data:audio/wav;base64,${data.audio_base64}`);
           currentAudioRef.current = audio;
           await new Promise<void>((resolve) => {
             speakResolveRef.current = resolve;
-            audio.onended = () => { speakResolveRef.current = null; resolve(); };
-            audio.onerror = () => { speakResolveRef.current = null; resolve(); };
-            audio.play().catch(() => { speakResolveRef.current = null; resolve(); });
+            audio.onended = () => {
+              if (currentAudioRef.current === audio) currentAudioRef.current = null;
+              speakResolveRef.current = null;
+              resolve();
+            };
+            audio.onerror = () => {
+              if (currentAudioRef.current === audio) currentAudioRef.current = null;
+              speakResolveRef.current = null;
+              resolve();
+            };
+            audio.play().catch(() => {
+              if (currentAudioRef.current === audio) currentAudioRef.current = null;
+              speakResolveRef.current = null;
+              resolve();
+            });
           });
-          currentAudioRef.current = null;
         }
       }
     } catch {
@@ -121,10 +175,20 @@ export default function CaseTakingPage() {
   function stopListening(discard = false) {
     skipProcessRef.current = discard;
     cleanupSilenceWatch();
+    if (speechRecognitionRef.current) {
+      const recognition = speechRecognitionRef.current;
+      speechRecognitionRef.current = null;
+      try {
+        if (discard && recognition.abort) recognition.abort();
+        else recognition.stop();
+      } catch {}
+      if (discard) setInputMode('idle');
+      return;
+    }
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== 'inactive') {
       setInputMode(discard ? 'idle' : 'processing');
-      recorder.stop();
+      try { recorder.stop(); } catch {}
     }
   }
 
@@ -170,9 +234,58 @@ export default function CaseTakingPage() {
   }
 
   async function startListening() {
-    if (inputMode === 'processing' || inputMode === 'asking') return;
+    if (isProcessingAnswerRef.current || inputMode === 'processing' || inputMode === 'asking') return;
     interruptSpeech();
     try {
+      const speechWindow = window as unknown as {
+        SpeechRecognition?: new () => BrowserSpeechRecognition;
+        webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
+      };
+      const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        if (speechRecognitionRef.current) {
+          try { speechRecognitionRef.current.abort?.(); } catch {}
+          speechRecognitionRef.current = null;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = lang === 'hi' ? 'hi-IN' : 'en-IN';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        let handled = false;
+
+        recognition.onresult = event => {
+          if (handled || isProcessingAnswerRef.current) return;
+          const transcript = Array.from(event.results)
+            .map(result => result[0]?.transcript || '')
+            .join(' ')
+            .trim();
+          if (transcript) {
+            handled = true;
+            try { recognition.stop(); } catch {}
+            speechRecognitionRef.current = null;
+            processAnswer(transcript);
+          }
+        };
+        recognition.onerror = () => {
+          if (handled) return;
+          speechRecognitionRef.current = null;
+          setInputMode('idle');
+          setMicHint(lang === 'hi'
+            ? 'माइक से आवाज़ नहीं मिली। कृपया फिर से बोलें या नीचे विकल्प चुनें।'
+            : 'No voice was heard. Please try again or tap an option below.');
+        };
+        recognition.onend = () => {
+          speechRecognitionRef.current = null;
+          if (!handled && !isProcessingAnswerRef.current && inputMode === 'listening') setInputMode('idle');
+        };
+        speechRecognitionRef.current = recognition;
+        setMicHint(null);
+        setInputMode('listening');
+        recognition.start();
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicHint(null);
       const recorder = new MediaRecorder(stream);
@@ -217,9 +330,13 @@ export default function CaseTakingPage() {
       : 'Sorry, I could not understand that. Please try again or tap an option below.');
   }
 
-  // ─── Fetch next question from Gemini, then speak it, then auto-listen ────
+  // ─── Fetch next question from AI / engine, then speak it, then auto-listen ────
   async function fetchNextQuestion(state: ClinicalState, msgs: ConversationMessage[], count: number) {
-    setInputMode('asking');
+    if (count >= MAX_QUESTIONS) {
+      await finishInterview(state);
+      return;
+    }
+
     try {
       const resp = await fetch('/api/next-question', {
         method: 'POST',
@@ -232,60 +349,124 @@ export default function CaseTakingPage() {
         }),
       });
 
-      if (!resp.ok) throw new Error('API failed');
-      const q: DynamicQuestion = await resp.json();
+      let q: DynamicQuestion;
+      if (resp.ok) {
+        q = await resp.json();
+      } else {
+        q = buildFallbackQuestion(state, lang, count);
+      }
       consecutiveFailuresRef.current = 0;
 
       if (q.is_complete || count >= MAX_QUESTIONS) {
-        await finishInterview();
+        await finishInterview(state);
         return;
       }
 
+      // Display question & options IMMEDIATELY without waiting for audio
       setCurrentQuestion(q);
       addAIMessage(q.question, q.options);
+      setInputMode('idle');
+
       await speak(q.question);
-      await startListening();
+      if (!isProcessingAnswerRef.current) {
+        await startListening();
+      }
     } catch {
       consecutiveFailuresRef.current += 1;
       if (consecutiveFailuresRef.current >= 3) {
-        await finishInterview();
+        await finishInterview(state);
         return;
       }
-      // Fallback question — pick based on what's still missing so we never re-ask
-      // the chief complaint once it's already known (this used to cause an
-      // infinite "same question" loop whenever the next-question API failed).
-      const fallback = buildFallbackQuestion(state, lang);
+      const fallback = buildFallbackQuestion(state, lang, count);
+      if (fallback.is_complete || count >= MAX_QUESTIONS) {
+        await finishInterview(state);
+        return;
+      }
       setCurrentQuestion(fallback);
       addAIMessage(fallback.question, fallback.options);
+      setInputMode('idle');
       await speak(fallback.question);
-      await startListening();
+      if (!isProcessingAnswerRef.current) {
+        await startListening();
+      }
     }
   }
 
-  async function finishInterview() {
+  async function finishInterview(stateToUse?: ClinicalState, flagsToUse?: typeof redFlags) {
     setIsComplete(true);
     setCurrentQuestion(null);
-    const closingText = lang === 'hi'
-      ? '🙏 धन्यवाद! आपकी सभी जानकारी ले ली गई है। अब आप अपने पिछले दस्तावेज़ अपलोड कर सकते हैं।'
-      : '🙏 Thank you! I have collected your history. You may now upload any previous medical documents.';
-    addAIMessage(closingText);
     setInputMode('idle');
+    setReportLoading(true);
+
+    const activeState = stateToUse || clinicalState;
+    const activeFlags = flagsToUse || redFlags;
+
+    const closingText = lang === 'hi'
+      ? 'आपकी सभी जानकारी दर्ज कर ली गई है। आपकी संपूर्ण रिपोर्ट तैयार की जा रही है।'
+      : 'All your information has been recorded. Generating your complete report.';
+    addAIMessage(closingText);
     await speak(closingText);
+
+    try {
+      const resp = await fetch('/api/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clinical_state: activeState,
+          red_flags: activeFlags,
+          documents: session.documents || [],
+          lang,
+        }),
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        const summaryData = data.summary;
+        setGeneratedReport(summaryData);
+        const updSession = {
+          ...session,
+          clinicalState: activeState,
+          messages: messagesRef.current,
+          redFlags: activeFlags,
+          summary: JSON.stringify(summaryData),
+        };
+        setSession(updSession);
+        saveSession(updSession);
+
+        const readyText = lang === 'hi'
+          ? 'आपकी पूर्ण रिपोर्ट तैयार हो गई है। कृपया इसे देखें।'
+          : 'Your complete report is ready. Please review it.';
+        await speak(readyText);
+      }
+    } catch (err) {
+      console.error('Failed to generate report after interview:', err);
+    } finally {
+      setReportLoading(false);
+    }
   }
 
   // ─── Initial greeting + first question ───────────────────────────────────
   useEffect(() => {
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
+    const initialQ = buildFallbackQuestion(clinicalState, lang, 0);
+    setCurrentQuestion(initialQ);
+    setInputMode('idle');
+
     if (messages.length === 0) {
       const greeting = lang === 'hi'
-        ? `नमस्ते${session.patient ? ` ${session.patient.name.split(' ')[0]}` : ''}! मैं आपकी AI सहायक हूँ। बताइए, मैं आपकी क्या मदद कर सकती हूँ?`
-        : `Hello${session.patient ? ` ${session.patient.name.split(' ')[0]}` : ''}! I'm your AI assistant. Tell me, how can I help you today?`;
+        ? `नमस्ते${session.patient ? ` ${session.patient.name.split(' ')[0]}` : ''}! मैं आपकी AI सहायक हूँ। बताइए, आज आपको क्या तकलीफ है?`
+        : `Hello${session.patient ? ` ${session.patient.name.split(' ')[0]}` : ''}! I'm your AI assistant. Tell me, what brings you in today?`;
 
-      const greetMsg: ConversationMessage = { id: uuidv4(), speaker: 'AI', text: greeting, timestamp: new Date().toISOString() };
+      const greetMsg: ConversationMessage = { id: uuidv4(), speaker: 'AI', text: greeting, timestamp: new Date().toISOString(), options: initialQ.options };
       setMessages([greetMsg]);
 
       (async () => {
         await speak(greeting);
-        await fetchNextQuestion(clinicalState, [greetMsg], 0);
+        if (!isProcessingAnswerRef.current) {
+          await startListening();
+        }
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -302,9 +483,12 @@ export default function CaseTakingPage() {
 
   // ─── Process patient answer (from voice, tap, or typed text) ─────────────
   async function processAnswer(answer: string) {
+    if (isProcessingAnswerRef.current) return;
     if (!answer.trim() || !currentQuestion || inputMode === 'processing' || inputMode === 'asking') return;
 
+    isProcessingAnswerRef.current = true;
     interruptSpeech();
+    stopListening(true);
     addPatientMessage(answer);
     setLastAnswer(answer);
     setMicHint(null);
@@ -334,6 +518,13 @@ export default function CaseTakingPage() {
         newState = applyAnswerFallback(currentQuestion.field as keyof ClinicalState, answer, clinicalState);
       }
 
+      // Automatically scale severity according to disease question & patient answer
+      const scaled = calculateScaledSeverity(answer, currentQuestion.field, newState.severity ?? null);
+      if (scaled.score > (newState.severity || 0) || currentQuestion.field === 'severity') {
+        newState.severity = scaled.score;
+      }
+      setSeverityLevel(scaled.level);
+
       setClinicalState(newState);
 
       const flags = detectRedFlags(newState, lang);
@@ -352,62 +543,45 @@ export default function CaseTakingPage() {
       const newCount = questionCount + 1;
       setQuestionCount(newCount);
       await fetchNextQuestion(clinicalState, messagesRef.current, newCount);
+    } finally {
+      isProcessingAnswerRef.current = false;
     }
   }
 
-  // ─── Fallback: pick the next question locally when the AI API fails ──────
-  // Walks the clinical state and asks about the first field that's still
-  // empty, so a transient API failure never re-asks something already known.
-  function buildFallbackQuestion(state: ClinicalState, lang: 'hi' | 'en'): DynamicQuestion {
-    const isHi = lang === 'hi';
-
-    if (!state.chief_complaint) {
-      return {
-        question: isHi ? 'आज आपको क्या तकलीफ है?' : 'What brings you in today?',
-        options: isHi
-          ? ['सीने में दर्द', 'पेट दर्द', 'बुखार', 'सिरदर्द', 'अन्य']
-          : ['Chest pain', 'Stomach pain', 'Fever', 'Headache', 'Other'],
-        field: 'chief_complaint',
-        is_complete: false,
-      };
-    }
-    if (!state.onset) {
-      return {
-        question: isHi ? 'यह तकलीफ कब से शुरू हुई?' : 'When did this problem start?',
-        options: isHi
-          ? ['आज', 'कल', 'कुछ दिन पहले', 'कुछ हफ्ते पहले', 'बहुत समय से']
-          : ['Today', 'Yesterday', 'A few days ago', 'A few weeks ago', 'A long time ago'],
-        field: 'onset',
-        is_complete: false,
-      };
-    }
-    if (state.severity == null) {
-      return {
-        question: isHi ? '1 से 10 में, दर्द/तकलीफ कितनी है?' : 'On a scale of 1 to 10, how severe is it?',
-        options: ['2', '4', '6', '8', '10'],
-        field: 'severity',
-        is_complete: false,
-      };
-    }
-
-    // Everything important has at least a partial answer — wrap up.
-    return {
-      question: isHi ? 'क्या कुछ और है जो डॉक्टर को बताना चाहते हैं?' : 'Is there anything else you would like to tell the doctor?',
-      options: isHi ? ['नहीं, यही सब है', 'हाँ, एक और बात है'] : ["No, that's all", 'Yes, one more thing'],
-      field: 'associated_symptoms',
-      is_complete: true,
-    };
+  // ─── Fallback: pick the disease-specific question when API fails ─────────
+  function buildFallbackQuestion(state: ClinicalState, lang: 'hi' | 'en', count: number = 0): DynamicQuestion {
+    return getDiseaseSpecificQuestion(state, count, lang);
   }
 
   // ─── Fallback: apply answer without LLM ──────────────────────────────────
   function applyAnswerFallback(field: keyof ClinicalState, answer: string, state: ClinicalState): ClinicalState {
     const s = { ...state };
-    const boolYes = answer.toLowerCase().includes('हाँ') || answer.toLowerCase().includes('yes');
+    const lower = answer.toLowerCase();
+    const boolYes = lower.includes('हाँ') || lower.includes('yes') || lower.includes('ha') || lower.includes('haa');
     const boolFields = ['breathlessness', 'sweating', 'dizziness', 'nausea', 'previous_episode'];
-    if (boolFields.includes(field)) { (s as Record<string, unknown>)[field] = boolYes; }
-    else if (field === 'severity') { const n = parseInt(answer); if (!isNaN(n)) (s as Record<string, unknown>)[field] = n; }
-    else if (Array.isArray(s[field])) { (s[field] as string[]).push(answer); }
-    else { (s as Record<string, unknown>)[field] = answer; }
+    if (boolFields.includes(field)) {
+      (s as Record<string, unknown>)[field] = boolYes;
+    } else if (field === 'severity') {
+      const scaled = calculateScaledSeverity(answer, 'severity', s.severity ?? null);
+      s.severity = scaled.score;
+    } else if (Array.isArray(s[field])) {
+      (s[field] as string[]).push(answer);
+    } else {
+      (s as Record<string, unknown>)[field] = answer;
+    }
+
+    // Auto-detect symptoms from text
+    if (lower.includes('सांस') || lower.includes('breath')) s.breathlessness = true;
+    if (lower.includes('पसीना') || lower.includes('sweat')) s.sweating = true;
+    if (lower.includes('चक्कर') || lower.includes('dizzy')) s.dizziness = true;
+    if (lower.includes('उल्टी') || lower.includes('vomit') || lower.includes('जी मिचलाना') || lower.includes('nausea')) s.nausea = true;
+
+    // Check if answer contains scaled severity information
+    const scaled = calculateScaledSeverity(answer, String(field), s.severity ?? null);
+    if (scaled.score > (s.severity || 0)) {
+      s.severity = scaled.score;
+    }
+
     return s;
   }
 
@@ -419,9 +593,9 @@ export default function CaseTakingPage() {
   }
 
   function handleOptionTap(opt: string) {
-    if (inputMode === 'processing' || inputMode === 'asking') return;
+    if (isProcessingAnswerRef.current || inputMode === 'processing') return;
     if (inputMode === 'listening') stopListening(true);
-    else if (inputMode === 'speaking') interruptSpeech();
+    if (inputMode === 'speaking') interruptSpeech();
     processAnswer(opt);
   }
 
@@ -433,7 +607,15 @@ export default function CaseTakingPage() {
   }
 
   function handleContinue() {
-    saveSession({ ...session, clinicalState, messages, redFlags });
+    interruptSpeech();
+    stopListening(true);
+    saveSession({
+      ...session,
+      clinicalState,
+      messages,
+      redFlags,
+      summary: generatedReport ? JSON.stringify(generatedReport) : session.summary,
+    });
     router.push('/upload');
   }
 
@@ -443,7 +625,7 @@ export default function CaseTakingPage() {
     saveSession(updated);
   }
 
-  const progress = Math.min(Math.round((questionCount / MAX_QUESTIONS) * 100), 100);
+  const progress = isComplete ? 100 : Math.min(Math.round(((questionCount + 1) / 5) * 100), 90);
 
   const statusLabel =
     inputMode === 'speaking' ? t(lang, 'case_speaking') :
@@ -471,6 +653,18 @@ export default function CaseTakingPage() {
             )}
           </div>
           <div className={styles.progressWrap}>
+            {/* Live Scaled Severity Badge */}
+            <div className={styles.severityWrap} title={lang === 'hi' ? 'स्वतः गंभीर स्तर (Auto-scaled severity)' : 'Auto-scaled severity'}>
+              <span className={styles.severityTitle}>{lang === 'hi' ? 'गंभीरता' : 'Severity'}:</span>
+              <span className={`${styles.severityBadgeLive} ${styles[`sev_${severityLevel.toLowerCase()}`] || styles.sev_mild}`}>
+                <span className={styles.severityDot} />
+                {severityLevel === 'MILD' && (lang === 'hi' ? 'सामान्य' : 'Mild')}
+                {severityLevel === 'MODERATE' && (lang === 'hi' ? 'मध्यम' : 'Moderate')}
+                {severityLevel === 'SEVERE' && (lang === 'hi' ? 'गंभीर' : 'Severe')}
+                {severityLevel === 'CRITICAL' && (lang === 'hi' ? 'अति-गंभीर' : 'Critical')}
+              </span>
+            </div>
+
             <button
               className={styles.voiceToggleBtn}
               onClick={() => setVoiceEnabled(v => !v)}
@@ -479,7 +673,11 @@ export default function CaseTakingPage() {
             >
               {voiceEnabled ? '🔊' : '🔇'}
             </button>
-            <div className={styles.progressLabel}>{questionCount} / {MAX_QUESTIONS}</div>
+            <div className={styles.progressLabel}>
+              {isComplete
+                ? (lang === 'hi' ? 'पूर्ण' : 'Complete')
+                : (lang === 'hi' ? `प्रश्न ${questionCount + 1}` : `Question ${questionCount + 1}`)}
+            </div>
             <div className="progress-bar-track" style={{ width: 120 }}>
               <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
             </div>
@@ -500,7 +698,7 @@ export default function CaseTakingPage() {
           )}
           {isComplete && (
             <p className={styles.questionCaption}>
-              {lang === 'hi' ? '🙏 धन्यवाद! आपकी जानकारी पूरी हो गई है।' : '🙏 Thank you! Your history is complete.'}
+              {lang === 'hi' ? 'आपकी जानकारी पूरी हो गई है।' : 'Your history collection is complete.'}
             </p>
           )}
 
@@ -512,7 +710,7 @@ export default function CaseTakingPage() {
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" stroke="white" strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </div>
-              {(inputMode === 'processing' || inputMode === 'asking') && (
+              {(inputMode === 'processing' || inputMode === 'asking' || (isComplete && reportLoading)) && (
                 <div className={styles.avatarSpinner}><div className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} /></div>
               )}
             </div>
@@ -528,6 +726,166 @@ export default function CaseTakingPage() {
             <p className={styles.answerCaption}>“{lastAnswer}”</p>
           )}
 
+          {/* Complete Clinical Report Card generated right after disease questions finish */}
+          {isComplete && (
+            <div className={styles.reportPreviewCard}>
+              <div className={styles.reportHeader}>
+                <div className={styles.reportTitleWrap}>
+                  <span className={styles.reportIcon}>📋</span>
+                  <div>
+                    <h2 className={styles.reportTitle}>
+                      {lang === 'hi' ? 'रोगी पूर्ण चिकित्सा रिपोर्ट' : 'Complete Patient Clinical Report'}
+                    </h2>
+                    <p className={styles.reportSubtitle}>
+                      {lang === 'hi' ? 'बीमारी के प्रश्नों के आधार पर तैयार संपूर्ण रिपोर्ट' : 'Complete clinical report generated from disease assessment'}
+                    </p>
+                  </div>
+                </div>
+                {generatedReport?.priority && (
+                  <span className={`${styles.priorityBadge} ${styles['priority_' + String(generatedReport.priority).toLowerCase()] || ''}`}>
+                    {generatedReport.priority}
+                  </span>
+                )}
+              </div>
+
+              {reportLoading ? (
+                <div className={styles.reportLoadingWrap}>
+                  <div className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
+                  <p>{lang === 'hi' ? 'संपूर्ण रिपोर्ट तैयार की जा रही है...' : 'Generating complete clinical report...'}</p>
+                </div>
+              ) : generatedReport ? (
+                <div className={styles.reportBody}>
+                  {/* Scaled Severity Row */}
+                  <div className={styles.reportSeverityRow}>
+                    <span className={styles.reportSectionLabel} style={{ marginBottom: 0 }}>
+                      {lang === 'hi' ? 'आकलित गंभीरता (Severity):' : 'Scaled Severity:'}
+                    </span>
+                    <span className={`${styles.severityBadgeLive} ${styles[`sev_${severityLevel.toLowerCase()}`] || styles.sev_mild}`}>
+                      <span className={styles.severityDot} />
+                      {severityLevel === 'MILD' && (lang === 'hi' ? 'सामान्य (Mild - 1-3/10)' : 'Mild (1-3/10)')}
+                      {severityLevel === 'MODERATE' && (lang === 'hi' ? 'मध्यम (Moderate - 4-6/10)' : 'Moderate (4-6/10)')}
+                      {severityLevel === 'SEVERE' && (lang === 'hi' ? 'गंभीर (Severe - 7-8/10)' : 'Severe (7-8/10)')}
+                      {severityLevel === 'CRITICAL' && (lang === 'hi' ? 'अति-गंभीर (Critical - 9-10/10)' : 'Critical (9-10/10)')}
+                    </span>
+                  </div>
+
+                  {generatedReport.summary_text && (
+                    <p className={styles.reportSummaryText}>{generatedReport.summary_text}</p>
+                  )}
+
+                  <div className={styles.reportDetailsGrid}>
+                    {generatedReport.chief_complaint && (
+                      <div className={styles.reportSection}>
+                        <span className={styles.reportSectionLabel}>
+                          {lang === 'hi' ? 'मुख्य समस्या' : 'Chief Complaint'}:
+                        </span>
+                        <span className={styles.reportSectionValue}>{generatedReport.chief_complaint}</span>
+                      </div>
+                    )}
+
+                    {generatedReport.history_of_present_illness && (
+                      <div className={styles.reportSection}>
+                        <span className={styles.reportSectionLabel}>
+                          {lang === 'hi' ? 'लक्षण इतिहास' : 'History of Present Illness'}:
+                        </span>
+                        <span className={styles.reportSectionValue}>{generatedReport.history_of_present_illness}</span>
+                      </div>
+                    )}
+
+                    {generatedReport.associated_symptoms && Array.isArray(generatedReport.associated_symptoms) && generatedReport.associated_symptoms.length > 0 && (
+                      <div className={styles.reportSection}>
+                        <span className={styles.reportSectionLabel}>
+                          {lang === 'hi' ? 'संबद्ध लक्षण' : 'Associated Symptoms'}:
+                        </span>
+                        <div className={styles.symptomPills}>
+                          {generatedReport.associated_symptoms.map((s: string, idx: number) => (
+                            <span key={idx} className={styles.symptomPill}>{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Red flags warning if detected */}
+                    {((generatedReport.red_flags && generatedReport.red_flags.length > 0) || redFlags.length > 0) && (
+                      <div className={styles.reportRedFlags}>
+                        <div className={styles.reportRedFlagTitle}>
+                          <span>🚩</span>
+                          <span>{lang === 'hi' ? 'चेतावनी संकेत (Red Flags)' : 'Warning Signs (Red Flags)'}</span>
+                        </div>
+                        {(generatedReport.red_flags || redFlags.map(f => f.description)).map((rf: string, idx: number) => (
+                          <div key={idx} className={styles.reportRedFlagItem}>
+                            <span>•</span>
+                            <span>{rf}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Recommendations for triage / doctor */}
+                    {generatedReport.recommended_actions && Array.isArray(generatedReport.recommended_actions) && generatedReport.recommended_actions.length > 0 && (
+                      <div className={styles.reportSection}>
+                        <span className={styles.reportSectionLabel}>
+                          {lang === 'hi' ? 'चिकित्सक अनुशंसा (Doctor Actions)' : 'Clinical Recommendations'}:
+                        </span>
+                        <div className={styles.recommendationsList}>
+                          {generatedReport.recommended_actions.map((rec: string, idx: number) => (
+                            <div key={idx} className={styles.recommendationItem}>
+                              <span>✓</span>
+                              <span>{rec}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions inside report card */}
+                  <div className={styles.reportActionGrid}>
+                    <button
+                      id="case-view-full-summary-btn"
+                      className="btn btn-primary btn-lg"
+                      onClick={() => {
+                        saveSession({
+                          ...session,
+                          clinicalState,
+                          messages: messagesRef.current,
+                          redFlags,
+                          summary: JSON.stringify(generatedReport),
+                        });
+                        router.push('/summary');
+                      }}
+                    >
+                      {lang === 'hi' ? 'पूरा सारांश पृष्ठ देखें' : 'View Full Summary Page'}
+                    </button>
+                    <button
+                      id="case-upload-docs-btn"
+                      className="btn btn-outline btn-lg"
+                      onClick={handleContinue}
+                    >
+                      {lang === 'hi' ? 'दस्तावेज़ अपलोड करें' : 'Upload Documents'}
+                    </button>
+                    <button
+                      id="case-doctor-dash-btn"
+                      className="btn btn-outline btn-lg"
+                      onClick={() => {
+                        saveSession({
+                          ...session,
+                          clinicalState,
+                          messages: messagesRef.current,
+                          redFlags,
+                          summary: JSON.stringify(generatedReport),
+                        });
+                        router.push('/doctor');
+                      }}
+                    >
+                      {lang === 'hi' ? 'डॉक्टर डैशबोर्ड' : 'Doctor Dashboard'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+
           {/* MCQ tap options */}
           {!isComplete && currentQuestion && currentQuestion.options?.length > 0 && (
             <div className={styles.mcqGrid}>
@@ -536,7 +894,7 @@ export default function CaseTakingPage() {
                   key={opt}
                   className={styles.mcqBtn}
                   onClick={() => handleOptionTap(opt)}
-                  disabled={inputMode === 'processing' || inputMode === 'asking'}
+                  disabled={inputMode === 'processing'}
                 >
                   {opt}
                 </button>
@@ -551,7 +909,7 @@ export default function CaseTakingPage() {
                 id="case-mic-btn"
                 className={`${styles.micBtnLarge} ${inputMode === 'listening' ? styles.micBtnActive : ''}`}
                 onClick={handleMicTap}
-                disabled={inputMode === 'processing' || inputMode === 'asking'}
+                disabled={inputMode === 'processing'}
                 aria-label={inputMode === 'listening' ? 'Stop recording' : 'Start voice input'}
               >
                 {inputMode === 'listening' && <div className={styles.rippleLarge} />}
@@ -592,10 +950,15 @@ export default function CaseTakingPage() {
 
         {isComplete && (
           <div className={styles.completeBar}>
-            <div className={styles.completeMsg}><span>✅</span><span>{lang === 'hi' ? 'इतिहास पूर्ण हुआ' : 'History complete'}</span></div>
+            <div className={styles.completeMsg}>
+              <span>✅</span>
+              <span>{lang === 'hi' ? 'इतिहास दर्ज हुआ' : 'History Recorded'}</span>
+            </div>
             <button id="case-continue-btn" className="btn btn-primary btn-lg" onClick={handleContinue}>
-              {lang === 'hi' ? 'दस्तावेज़ अपलोड करें' : 'Upload Documents'}
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              {lang === 'hi' ? 'दस्तावेज़ अपलोड करें (आगे बढ़ें)' : 'Upload Documents (Continue)'}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </button>
           </div>
         )}

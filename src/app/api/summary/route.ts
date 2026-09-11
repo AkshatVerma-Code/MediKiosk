@@ -1,116 +1,177 @@
 // src/app/api/summary/route.ts
-// Gemini AI — Generate structured physician-ready summary from clinical state
+// Generate complete, structured physician-ready clinical report from disease interview
 
 import { NextRequest, NextResponse } from 'next/server';
-
-const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
 
 export async function POST(req: NextRequest) {
   try {
     const { clinical_state, red_flags, documents, lang } = await req.json();
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'Gemini key not set' }, { status: 500 });
-    }
+    const mistralKey = process.env.MISTRAL_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const isHi = lang === 'hi';
 
-    const prompt = `You are a clinical documentation assistant. Generate a concise, structured physician-ready summary.
+    const prompt = `You are an expert clinical documentation specialist at a hospital kiosk.
+Create a comprehensive, complete, professional Physician Clinical Report based on the patient history collected.
 
-Clinical State (collected from patient interview):
+Clinical State Collected:
 ${JSON.stringify(clinical_state, null, 2)}
 
 Red Flags Detected:
 ${JSON.stringify(red_flags, null, 2)}
 
-Previous Documents Extracted:
+Existing Uploaded Documents:
 ${JSON.stringify(documents, null, 2)}
 
-Generate a structured summary in ${lang === 'hi' ? 'BOTH Hindi and English' : 'English'}.
+Language requested: ${isHi ? 'Hindi (Devanagari script)' : 'English'}
 
-Return ONLY valid JSON with no markdown code fences, no explanation, nothing else:
+Generate a structured, complete report. Return ONLY valid JSON with no markdown formatting:
 {
-  "chief_complaint": "brief 1-line statement",
-  "history_of_present_illness": "1-3 sentence narrative",
-  "associated_symptoms": ["symptom1", "symptom2"],
-  "past_medical_history": ["condition1"],
-  "current_medications": [{"name": "drug", "dose": "dose or null", "frequency": "freq or null"}],
-  "relevant_investigations": [{"name": "test", "value": "val", "status": "NORMAL or LOW or HIGH"}],
-  "red_flags": ["flag description"],
-  "priority": "URGENT",
-  "summary_text": "2-3 sentence overall summary for the doctor",
-  "ai_disclaimer": "This is an AI-generated summary based on patient-reported history. Clinical judgment required."
-}
+  "chief_complaint": "Chief complaint with duration (in ${isHi ? 'Hindi' : 'English'})",
+  "history_of_present_illness": "Detailed clinical narrative describing onset, character, severity, radiation, aggravating/relieving factors (in ${isHi ? 'Hindi' : 'English'})",
+  "severity_assessment": {
+    "score": ${clinical_state?.severity || 3},
+    "level": "${clinical_state?.severity && clinical_state.severity >= 8 ? 'SEVERE' : clinical_state?.severity && clinical_state.severity >= 4 ? 'MODERATE' : 'MILD'}",
+    "description": "Severity description with clinical implications"
+  },
+  "associated_symptoms": ["list of positive associated symptoms"],
+  "past_medical_history": ["known past conditions or None reported"],
+  "current_medications": [{"name": "drug", "dose": "dose or null", "frequency": "frequency or null"}],
+  "relevant_investigations": [{"name": "investigation", "value": "value", "status": "NORMAL"}],
+  "red_flags": ["list of red flag warnings detected"],
+  "priority": "URGENT or HIGH or ROUTINE",
+  "recommended_actions": ["1-3 clinical recommendations for triage doctor"],
+  "summary_text": "2-4 sentence cohesive clinical synthesis for the physician (in ${isHi ? 'Hindi' : 'English'})",
+  "ai_disclaimer": "This is an AI-assisted clinical intake report. Physician evaluation and clinical examination required."
+}`;
 
-priority must be one of: URGENT, HIGH, ROUTINE
-Be factual. Do not diagnose. Only report what was collected.
-If a field has no data, use null or empty array.`;
+    // 1. Try Mistral AI if available
+    if (mistralKey) {
+      try {
+        const mistralModel = process.env.MISTRAL_MODEL || 'open-mistral-7b';
+        const mistralResp = await fetch('https://api.mistral.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${mistralKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: mistralModel,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.2,
+          }),
+        });
 
-    const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 2000,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Gemini summary error:', errText);
-      return NextResponse.json({ error: 'Summary generation failed', detail: errText }, { status: 500 });
+        if (mistralResp.ok) {
+          const mData = await mistralResp.json();
+          const rawMText = mData.choices?.[0]?.message?.content || '{}';
+          const cleanMText = rawMText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+          const parsed = JSON.parse(cleanMText);
+          if (parsed.chief_complaint || parsed.summary_text) {
+            return NextResponse.json({ summary: parsed });
+          }
+        }
+      } catch (mErr) {
+        console.warn('Mistral summary generation failed, falling back:', mErr);
+      }
     }
 
-    const data = await response.json();
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    // 2. Try Gemini if available
+    if (geminiKey) {
+      try {
+        const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
+        const gResp = await fetch(`${geminiUrl}?key=${geminiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 2000 },
+          }),
+        });
 
-    // Strip markdown code fences if present
-    const cleanText = rawText
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*/gi, '')
-      .trim();
-
-    let summary: Record<string, unknown> = {};
-    try {
-      summary = JSON.parse(cleanText);
-    } catch (parseErr) {
-      console.error('Summary parse error:', parseErr, 'Raw:', cleanText);
-      // Return a fallback summary built from clinical state
-      summary = buildFallbackSummary(clinical_state, red_flags);
+        if (gResp.ok) {
+          const gData = await gResp.json();
+          const rawText = gData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const cleanText = rawText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+          const parsed = JSON.parse(cleanText);
+          return NextResponse.json({ summary: parsed });
+        }
+      } catch (gErr) {
+        console.warn('Gemini summary generation failed, falling back:', gErr);
+      }
     }
 
-    return NextResponse.json({ summary });
+    // 3. Robust, complete deterministic fallback report
+    const fallbackSummary = buildCompleteFallbackSummary(clinical_state || {}, red_flags || [], isHi);
+    return NextResponse.json({ summary: fallbackSummary });
   } catch (err) {
     console.error('Summary route error:', err);
-    return NextResponse.json({ error: 'Summary generation failed' }, { status: 500 });
+    return NextResponse.json({ summary: buildCompleteFallbackSummary({}, [], false) });
   }
 }
 
-function buildFallbackSummary(
-  cs: Record<string, unknown>,
-  redFlags: { rule_name: string; severity: string; description: string }[]
+function buildCompleteFallbackSummary(
+  cs: Record<string, any>,
+  redFlags: { rule_name?: string; severity?: string; description?: string }[],
+  isHi: boolean
 ) {
+  const sevScore = typeof cs.severity === 'number' ? cs.severity : 4;
+  const sevLevel = sevScore >= 9 ? 'CRITICAL' : sevScore >= 7 ? 'SEVERE' : sevScore >= 4 ? 'MODERATE' : 'MILD';
+  const hasRedFlags = redFlags.length > 0;
+  const priority = hasRedFlags || sevScore >= 8 ? 'URGENT' : sevScore >= 5 ? 'HIGH' : 'ROUTINE';
+
+  const symptomsList: string[] = [];
+  if (Array.isArray(cs.associated_symptoms)) {
+    symptomsList.push(...cs.associated_symptoms);
+  } else if (typeof cs.associated_symptoms === 'string' && cs.associated_symptoms) {
+    symptomsList.push(cs.associated_symptoms);
+  }
+  if (cs.breathlessness) symptomsList.push(isHi ? 'सांस लेने में तकलीफ (Breathlessness)' : 'Breathlessness');
+  if (cs.sweating) symptomsList.push(isHi ? 'ठंडा पसीना (Cold Sweating)' : 'Cold Sweating');
+  if (cs.dizziness) symptomsList.push(isHi ? 'चक्कर व आंखों में अंधेरा (Dizziness)' : 'Dizziness');
+  if (cs.nausea) symptomsList.push(isHi ? 'जी मिचलाना व उल्टी (Nausea/Vomiting)' : 'Nausea / Vomiting');
+
+  const chief = cs.chief_complaint || (isHi ? 'स्वास्थ्य समस्या' : 'Health Complaint');
+  const onset = cs.onset || (isHi ? 'हाल ही में शुरू' : 'Recent onset');
+  const character = cs.character ? ` (${cs.character})` : '';
+  const location = cs.location ? (isHi ? `, स्थान: ${cs.location}` : `, Site: ${cs.location}`) : '';
+  const radiation = cs.radiation ? (isHi ? `, फैलाव: ${cs.radiation}` : `, Radiation: ${cs.radiation}`) : '';
+
+  const hpi = isHi
+    ? `रोगी ने "${chief}" की शिकायत दर्ज की है, जो ${onset} से है${character}${location}${radiation}। गंभीरता स्तर ${sevScore}/10 (${sevLevel}) आंका गया है।`
+    : `Patient presents with ${chief} of ${onset} duration${character}${location}${radiation}. Severity scaled at ${sevScore}/10 (${sevLevel}).`;
+
+  const summaryNarrative = isHi
+    ? `रोगी को ${chief} की समस्या है (${onset})। कुल गंभीरता स्तर ${sevScore}/10 (${sevLevel}) है। ${hasRedFlags ? 'चेतावनी संकेत (Red Flags) मौजूद हैं — तुरंत डॉक्टर जांच आवश्यक है।' : 'प्राथमिक जांच व लक्षणों के अनुसार डॉक्टर परामर्श की सलाह दी जाती है।'}`
+    : `Patient reports ${chief} with onset ${onset}. Overall severity scaled at ${sevScore}/10 (${sevLevel}). ${hasRedFlags ? 'Red flags detected — urgent clinical evaluation recommended.' : 'Routine outpatient medical consultation recommended.'}`;
+
   return {
-    chief_complaint: cs.chief_complaint || 'Not specified',
-    history_of_present_illness: `Patient presents with ${cs.chief_complaint || 'unspecified complaint'} for ${cs.onset || 'unspecified duration'}.`,
-    associated_symptoms: [
-      cs.breathlessness ? 'Breathlessness' : null,
-      cs.sweating ? 'Sweating' : null,
-      cs.dizziness ? 'Dizziness' : null,
-      cs.nausea ? 'Nausea' : null,
-    ].filter(Boolean),
-    past_medical_history: cs.past_history || [],
-    current_medications: cs.medications
-      ? (cs.medications as string[]).map((m) => ({ name: m, dose: null, frequency: null }))
+    chief_complaint: `${chief} (${onset})`,
+    history_of_present_illness: hpi,
+    severity_assessment: {
+      score: sevScore,
+      level: sevLevel,
+      description: isHi
+        ? `गंभीरता स्कोर ${sevScore}/10 (${sevLevel})`
+        : `Severity score ${sevScore}/10 (${sevLevel})`,
+    },
+    associated_symptoms: Array.from(new Set(symptomsList)),
+    past_medical_history: cs.past_history || (isHi ? ['कोई ज्ञात पुरानी बीमारी नहीं बताई गई'] : ['None reported']),
+    current_medications: Array.isArray(cs.medications)
+      ? cs.medications.map((m: string) => ({ name: m, dose: null, frequency: null }))
       : [],
     relevant_investigations: [],
-    red_flags: redFlags.map((f) => f.description),
-    priority: redFlags.some((f) => f.severity === 'HIGH') ? 'URGENT' : 'ROUTINE',
-    summary_text: `Patient reports ${cs.chief_complaint || 'complaint'}. ${redFlags.length > 0 ? 'Red flags detected — immediate evaluation recommended.' : 'No immediate red flags detected.'}`,
-    ai_disclaimer:
-      'This is an AI-generated summary based on patient-reported history. Clinical judgment required.',
+    red_flags: redFlags.map((f) => f.description || f.rule_name || 'Warning indicator'),
+    priority,
+    recommended_actions: [
+      isHi ? 'चिकित्सक द्वारा शारीरिक परीक्षण (Physical exam by physician)' : 'Clinical examination by physician',
+      hasRedFlags || sevScore >= 8
+        ? (isHi ? 'तत्काल ईसीजी / आवश्यक रक्त जांच व वाइटल्स निगरानी' : 'Urgent vitals monitoring, ECG/Stat labs')
+        : (isHi ? 'दवा एवं घरेलू उपचार संबंधी निर्देश' : 'Prescription medication and care instructions'),
+    ],
+    summary_text: summaryNarrative,
+    ai_disclaimer: isHi
+      ? 'यह AI-जनित प्राथमिक इतिहास सारांश है। चिकित्सक द्वारा प्रत्यक्ष जांच अनिवार्य है।'
+      : 'This is an AI-assisted clinical intake report. Physician evaluation and clinical examination required.',
   };
 }

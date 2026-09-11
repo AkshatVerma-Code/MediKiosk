@@ -10,12 +10,14 @@ import styles from './page.module.css';
 interface AISummary {
   chief_complaint?: string;
   history_of_present_illness?: string;
+  severity_assessment?: { score?: number; level?: string; description?: string };
   associated_symptoms?: string[];
   past_medical_history?: string[];
   current_medications?: { name: string; dose?: string; frequency?: string }[];
   relevant_investigations?: { name: string; value?: string; status?: string }[];
   red_flags?: string[];
   priority?: 'URGENT' | 'HIGH' | 'ROUTINE';
+  recommended_actions?: string[];
   summary_text?: string;
   ai_disclaimer?: string;
 }
@@ -36,6 +38,17 @@ export default function SummaryPage() {
   };
 
   useEffect(() => {
+    if (session.summary) {
+      try {
+        const parsed = JSON.parse(session.summary);
+        setSummary(parsed);
+        setLoading(false);
+        if (session.documents && session.documents.length > 0) {
+          generateSummary();
+        }
+        return;
+      } catch {}
+    }
     generateSummary();
   }, []); // eslint-disable-line
 
@@ -202,6 +215,19 @@ export default function SummaryPage() {
                   </div>
                 )}
 
+                {/* Severity Assessment */}
+                {summary.severity_assessment && (
+                  <div className={styles.section}>
+                    <h3 className={styles.sectionLabel}>{lang === 'hi' ? 'आकलित गंभीरता' : 'Scaled Severity'}</h3>
+                    <p className={styles.sectionValue}>
+                      <span className="badge badge-warning" style={{ fontWeight: 700, marginRight: 8 }}>
+                        {summary.severity_assessment.score}/10 — {summary.severity_assessment.level}
+                      </span>
+                      {summary.severity_assessment.description}
+                    </p>
+                  </div>
+                )}
+
                 {/* Red flags */}
                 {summary.red_flags && summary.red_flags.length > 0 && (
                   <div className={styles.section}>
@@ -211,6 +237,20 @@ export default function SummaryPage() {
                     {summary.red_flags.map(f => (
                       <div key={f} className="badge badge-danger" style={{ display: 'block', marginBottom: 4 }}>{f}</div>
                     ))}
+                  </div>
+                )}
+
+                {/* Recommended Actions */}
+                {summary.recommended_actions && summary.recommended_actions.length > 0 && (
+                  <div className={styles.section}>
+                    <h3 className={styles.sectionLabel}>{lang === 'hi' ? 'चिकित्सक अनुशंसा' : 'Recommended Actions'}</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                      {summary.recommended_actions.map((act, i) => (
+                        <div key={i} className="badge badge-success" style={{ display: 'block', textAlign: 'left', padding: '6px 12px' }}>
+                          ✓ {act}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

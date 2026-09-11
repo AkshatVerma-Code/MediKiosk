@@ -30,6 +30,57 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.severityWrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--gray-50, #f9fafb);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+.severityTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.severityBadgeLive {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.3px;
+  transition: all var(--transition-fast);
+}
+
+.sev_mild {
+  background: var(--green-100);
+  color: var(--green-700);
+  border: 1px solid var(--green-300);
+}
+
+.sev_moderate {
+  background: #FEF3C7;
+  color: #D97706;
+  border: 1px solid #FCD34D;
+}
+
+.sev_severe {
+  background: #FEE2E2;
+  color: #DC2626;
+  border: 1px solid #FCA5A5;
+}
+
+.sev_critical {
+  background: #DC2626;
+  color: #FFFFFF;
+  border: 1px solid #991B1B;
+  animation: pulse-red 1.2s infinite;
 }
 .progressLabel {
   font-size: 13px;
@@ -291,3 +342,309 @@
   font-weight: 600;
   color: var(--green-600);
 }
+
+/* Report Preview Card */
+.reportPreviewCard {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 680px;
+  width: 100%;
+  box-shadow: var(--shadow-md);
+  text-align: left;
+  animation: fadeIn 0.4s ease-out;
+}
+
+.reportHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.reportTitleWrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.reportIcon {
+  font-size: 28px;
+}
+
+.reportTitle {
+  font-size: var(--font-size-xl);
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.reportSubtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.priorityBadge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.priority_urgent {
+  background: #FEE2E2;
+  color: #DC2626;
+  border: 1px solid #FCA5A5;
+}
+
+.priority_high {
+  background: #FEF3C7;
+  color: #D97706;
+  border: 1px solid #FCD34D;
+}
+
+.priority_routine {
+  background: var(--green-100);
+  color: var(--green-700);
+  border: 1px solid var(--green-300);
+}
+
+.reportLoadingWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  gap: 14px;
+  color: var(--text-muted);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.reportBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.reportSummaryText {
+  font-size: 15px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  background: var(--gray-50, #f9fafb);
+  border-left: 3px solid var(--green-500);
+  padding: 12px 16px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  margin: 0;
+}
+
+.reportDetailsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reportSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reportSectionLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--green-700);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.reportSectionValue {
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.symptomPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.symptomPill {
+  background: var(--green-50);
+  color: var(--green-700);
+  border: 1px solid var(--green-200);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Real-time Severity Scaler Indicator */
+.severityWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.severityTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.severityBadgeLive {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.3s ease;
+  letter-spacing: 0.3px;
+}
+
+.severityDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.sev_mild {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+.sev_mild .severityDot {
+  background: #10b981;
+}
+
+.sev_moderate {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+.sev_moderate .severityDot {
+  background: #f59e0b;
+}
+
+.sev_severe {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+}
+.sev_severe .severityDot {
+  background: #ea580c;
+  animation: pulseSeverity 1.5s infinite;
+}
+
+.sev_critical {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
+}
+.sev_critical .severityDot {
+  background: #ef4444;
+  animation: pulseSeverity 1s infinite;
+}
+
+@keyframes pulseSeverity {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+.reportSeverityRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  margin-top: 4px;
+}
+
+.reportRedFlags {
+  background: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reportRedFlagTitle {
+  font-size: 13px;
+  font-weight: 800;
+  color: #DC2626;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+}
+
+.reportRedFlagItem {
+  font-size: 14px;
+  color: #991B1B;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recommendationsList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.recommendationItem {
+  font-size: 14px;
+  color: var(--text-primary);
+  background: #F0FDF4;
+  border: 1px solid #BBF7D0;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reportActionGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.reportActionGrid button {
+  flex: 1;
+  min-width: 180px;
+}
+
+

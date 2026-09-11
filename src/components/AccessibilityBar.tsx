@@ -32,7 +32,7 @@ export default function AccessibilityBar({ lang, onLangChange, fontScale, onFont
           {/* Brand */}
           <div className={styles.brand}>
             <span className={styles.brandDot} />
-            <span className={styles.brandName}>MedCase</span>
+            <span className={styles.brandName}>MediKiosk</span>
           </div>
 
           <div className={styles.controls}>

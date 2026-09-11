@@ -45,8 +45,8 @@ export default function LandingPage() {
             </svg>
           </div>
           <div className={styles.logoText}>
-            <span className={styles.logoMain}>MedCase</span>
-            <span className={styles.logoSub}>मेडकेस</span>
+            <span className={styles.logoMain}>MediKiosk</span>
+            <span className={styles.logoSub}>मेडकिस्क</span>
           </div>
         </div>
 
@@ -89,17 +89,17 @@ export default function LandingPage() {
         </button>
 
         {/* Ministry badge */}
-        <div className={styles.ministry}>
+        {/*<div className={styles.ministry}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <path d="M12 2L2 7v10c0 4.4 4.27 8.5 10 10 5.73-1.5 10-5.6 10-10V7L12 2z"
               fill="currentColor" opacity="0.6" />
           </svg>
           Ministry of Ayush &nbsp;|&nbsp; SIH26047
-        </div>
+        </div>*/}
 
-        <p className={styles.disclaimer}>
+        {/*<p className={styles.disclaimer}>
           This is a demonstration prototype. Not intended for autonomous clinical diagnosis.
-        </p>
+        </p>*/}
       </div>
     </main>
   );

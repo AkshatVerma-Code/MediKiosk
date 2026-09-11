@@ -20,12 +20,12 @@ export default function AuthPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
-  const fillDemo = () => {
-    setAbhaId('DEMO-2026-' + Math.floor(Math.random() * 9000 + 1000));
-    setName(lang === 'hi' ? 'राजेश कुमार' : 'Rajesh Kumar');
-    setAge('52');
-    setGender('male');
-  };
+  // const fillDemo = () => {
+  //   setAbhaId('DEMO-2026-' + Math.floor(Math.random() * 9000 + 1000));
+  //   setName(lang === 'hi' ? 'राजेश कुमार' : 'Rajesh Kumar');
+  //   setAge('52');
+  //   setGender('male');
+  // };
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -90,12 +90,12 @@ export default function AuthPage() {
           </div>
 
           {/* Demo fill */}
-          <div className={styles.demoBanner}>
+          {/*<div className={styles.demoBanner}>
             <span className={styles.demoLabel}>{t(lang, 'auth_demo_note')}</span>
             <button className={`btn btn-sm btn-secondary`} onClick={fillDemo} id="auth-demo-fill">
               {t(lang, 'auth_demo_fill')}
             </button>
-          </div>
+          </div>*/}
 
           {/* Form */}
           <form className={styles.form} onSubmit={e => { e.preventDefault(); handleContinue(); }}>

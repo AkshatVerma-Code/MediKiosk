@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'MedCase — AI Patient History System | SIH26047',
+  title: 'MediKiosk — AI Patient History System | SIH26047',
   description:
     'AI-powered patient case-taking kiosk for government hospitals. Collects patient history through conversational AI before doctor consultation. Ministry of Ayush — SIH26047.',
   keywords: ['patient history', 'AI case taking', 'AYUSH', 'SIH', 'kiosk', 'hospital'],

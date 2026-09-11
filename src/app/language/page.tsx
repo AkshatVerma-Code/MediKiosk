@@ -62,7 +62,7 @@ export default function LanguagePage() {
               onClick={() => updateLang('hi')}
               aria-pressed={selected === 'hi'}
             >
-              <div className={styles.langFlag}>🇮🇳</div>
+              <div className={styles.langFlag}>IN</div>
               <div className={styles.langName}>हिंदी</div>
               <div className={styles.langNote}>Hindi</div>
               {selected === 'hi' && (
@@ -81,7 +81,7 @@ export default function LanguagePage() {
               onClick={() => updateLang('en')}
               aria-pressed={selected === 'en'}
             >
-              <div className={styles.langFlag}>🇬🇧</div>
+              <div className={styles.langFlag}>EN</div>
               <div className={styles.langName}>English</div>
               <div className={styles.langNote}>अंग्रेज़ी</div>
               {selected === 'en' && (

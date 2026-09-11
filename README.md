@@ -63,6 +63,50 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
+## ☁️ Deploying to Vercel
+
+This repo is a standard Next.js 14 App Router project, so Vercel needs no special
+configuration beyond environment variables.
+
+### 1. Import the project
+1. Push this repo to GitHub (already configured as the `origin` remote).
+2. In the [Vercel dashboard](https://vercel.com/new), click **Add New → Project** and import the repo.
+3. Framework Preset: **Next.js** (auto-detected). Build/Output settings can be left at their defaults
+   (`next build`, `.next`). If the repo is nested inside a monorepo, set **Root Directory** to the
+   folder containing this `package.json` — otherwise leave it as the repo root.
+
+### 2. Add environment variables
+In **Project Settings → Environment Variables**, add every key from [`.env.example`](./.env.example)
+for the **Production**, **Preview**, and **Development** environments:
+
+```
+SARVAM_API_KEY
+GEMINI_API_KEY
+MISTRAL_API_KEY
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+`NEXT_PUBLIC_*` variables are inlined at build time, so they must be set **before** you trigger a
+deployment (Vercel does this automatically since it injects env vars before running the build).
+
+### 3. Deploy
+Click **Deploy**. Every push to `main` will trigger a new Production deployment; every other
+branch/PR gets its own Preview deployment automatically.
+
+### Good to know
+- **Request body size**: Vercel Serverless Functions cap request bodies at **4.5 MB**. This affects
+  `/api/stt` (voice recordings) and `/api/ocr` (uploaded prescription photos). Short voice answers are
+  fine, but very large camera photos may need client-side compression before upload if you hit this limit.
+- **API routes run on the Node.js runtime** (not Edge) by default, which is required here since
+  `/api/ocr` uses `Buffer` — no changes needed, just don't add `export const runtime = 'edge'` to
+  these routes.
+- If Supabase env vars are left unset, `/api/session` will fail loudly (by design) instead of
+  silently writing to a placeholder project — set them once persistence is needed.
+
+---
+
 ## 📱 Demo Flow (MVP)
 
 1. **Landing** → `localhost:3000/`

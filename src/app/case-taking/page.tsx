@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import AccessibilityBar from '@/components/AccessibilityBar';
 import RedFlagAlert from '@/components/RedFlagAlert';
-import { loadSession, saveSession, ConversationMessage, ClinicalState, defaultClinicalState } from '@/lib/store';
+import { loadSession, saveSession, ConversationMessage, ClinicalState, defaultClinicalState, KNOWN_CLINICAL_FIELDS } from '@/lib/store';
 import { t } from '@/lib/translations';
 import { detectRedFlags } from '@/lib/redFlagRules';
 import { getDiseaseSpecificQuestion, calculateScaledSeverity, SeverityLevel } from '@/lib/questionEngine';
@@ -32,7 +32,10 @@ interface DynamicQuestion {
   is_complete: boolean;
 }
 
-const MAX_QUESTIONS = 6;
+// Absolute safety net only — the AI decides when the interview is actually
+// done (via is_complete). This just guarantees we can never loop forever if
+// that never happens for some reason.
+const MAX_QUESTIONS = 12;
 
 export default function CaseTakingPage() {
   const router = useRouter();
@@ -40,9 +43,11 @@ export default function CaseTakingPage() {
   const lang = session.language;
 
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
-  const [clinicalState, setClinicalState] = useState<ClinicalState>(session.clinicalState);
+  const [clinicalState, setClinicalState] = useState<ClinicalState>(
+    { ...defaultClinicalState, ...session.clinicalState }
+  );
   const [currentQuestion, setCurrentQuestion] = useState<DynamicQuestion | null>(() =>
-    getDiseaseSpecificQuestion(session.clinicalState || defaultClinicalState, 0, session.language || 'hi')
+    getDiseaseSpecificQuestion({ ...defaultClinicalState, ...session.clinicalState }, 0, session.language || 'hi')
   );
   const [lastAnswer, setLastAnswer] = useState('');
   const [questionCount, setQuestionCount] = useState(0);
@@ -343,7 +348,7 @@ export default function CaseTakingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clinical_state: state,
-          conversation_history: msgs.slice(-8).map(m => ({ speaker: m.speaker, text: m.text })),
+          conversation_history: msgs.map(m => ({ speaker: m.speaker, text: m.text })),
           question_count: count,
           lang,
         }),
@@ -509,13 +514,14 @@ export default function CaseTakingPage() {
         }),
       });
 
-      let newState = { ...clinicalState };
+      let newState: ClinicalState;
       if (resp.ok) {
         const data = await resp.json();
-        if (data.updated_state) newState = { ...clinicalState, ...data.updated_state };
-        else newState = applyAnswerFallback(currentQuestion.field as keyof ClinicalState, answer, clinicalState);
+        newState = data.updated_state
+          ? mergeExtractedState(clinicalState, data.updated_state, currentQuestion, answer)
+          : applyAnswerFallback(currentQuestion, answer, clinicalState);
       } else {
-        newState = applyAnswerFallback(currentQuestion.field as keyof ClinicalState, answer, clinicalState);
+        newState = applyAnswerFallback(currentQuestion, answer, clinicalState);
       }
 
       // Automatically scale severity according to disease question & patient answer
@@ -553,21 +559,77 @@ export default function CaseTakingPage() {
     return getDiseaseSpecificQuestion(state, count, lang);
   }
 
-  // ─── Fallback: apply answer without LLM ──────────────────────────────────
-  function applyAnswerFallback(field: keyof ClinicalState, answer: string, state: ClinicalState): ClinicalState {
-    const s = { ...state };
+  // ─── Helpers for complaint-specific (non-fixed) fields ───────────────────
+  // The dynamic AI question engine can invent a field name for anything that
+  // doesn't fit the fixed ClinicalState schema (e.g. "which animal bit you").
+  // Those get preserved verbatim here instead of being silently dropped.
+  function isKnownField(field: string): field is keyof ClinicalState {
+    return (KNOWN_CLINICAL_FIELDS as string[]).includes(field);
+  }
+
+  function withAdditionalFinding(state: ClinicalState, field: string, question: string, answer: string): ClinicalState {
+    const existingIdx = state.additional_findings.findIndex(f => f.field === field);
+    const entry = { field, question, answer };
+    const nextFindings = existingIdx >= 0
+      ? state.additional_findings.map((f, i) => (i === existingIdx ? entry : f))
+      : [...state.additional_findings, entry];
+    return { ...state, additional_findings: nextFindings };
+  }
+
+  // Merge whatever /api/extract returned into clinicalState: known fields go
+  // into their typed slot, anything complaint-specific is kept verbatim in
+  // additional_findings so it always flows through to the final report.
+  function mergeExtractedState(
+    base: ClinicalState,
+    extracted: Record<string, unknown>,
+    question: DynamicQuestion,
+    rawAnswer: string
+  ): ClinicalState {
+    let next = { ...base };
+
+    for (const [key, value] of Object.entries(extracted)) {
+      if (isKnownField(key)) {
+        (next as Record<string, unknown>)[key] = value;
+      }
+    }
+
+    if (isKnownField(question.field)) {
+      if (!(question.field in extracted)) {
+        if (Array.isArray(next[question.field])) {
+          next = { ...next, [question.field]: [...(next[question.field] as string[]), rawAnswer] };
+        } else {
+          (next as Record<string, unknown>)[question.field] = rawAnswer;
+        }
+      }
+    } else {
+      const answerText = typeof extracted[question.field] === 'string' ? String(extracted[question.field]) : rawAnswer;
+      next = withAdditionalFinding(next, question.field, question.question, answerText);
+    }
+
+    return next;
+  }
+
+  // ─── Fallback: apply answer without any AI (extraction API unreachable) ──
+  function applyAnswerFallback(question: DynamicQuestion, answer: string, state: ClinicalState): ClinicalState {
+    const field = question.field;
+    let s = { ...state };
     const lower = answer.toLowerCase();
     const boolYes = lower.includes('हाँ') || lower.includes('yes') || lower.includes('ha') || lower.includes('haa');
     const boolFields = ['breathlessness', 'sweating', 'dizziness', 'nausea', 'previous_episode'];
-    if (boolFields.includes(field)) {
-      (s as Record<string, unknown>)[field] = boolYes;
-    } else if (field === 'severity') {
-      const scaled = calculateScaledSeverity(answer, 'severity', s.severity ?? null);
-      s.severity = scaled.score;
-    } else if (Array.isArray(s[field])) {
-      (s[field] as string[]).push(answer);
+
+    if (isKnownField(field)) {
+      if (boolFields.includes(field)) {
+        (s as Record<string, unknown>)[field] = boolYes;
+      } else if (field === 'severity') {
+        const scaled = calculateScaledSeverity(answer, 'severity', s.severity ?? null);
+        s.severity = scaled.score;
+      } else if (Array.isArray(s[field])) {
+        s = { ...s, [field]: [...(s[field] as string[]), answer] };
+      } else {
+        (s as Record<string, unknown>)[field] = answer;
+      }
     } else {
-      (s as Record<string, unknown>)[field] = answer;
+      s = withAdditionalFinding(s, field, question.question, answer);
     }
 
     // Auto-detect symptoms from text
@@ -625,7 +687,11 @@ export default function CaseTakingPage() {
     saveSession(updated);
   }
 
-  const progress = isComplete ? 100 : Math.min(Math.round(((questionCount + 1) / 5) * 100), 90);
+  // The interview length is now dynamic (the AI decides when it's done), so
+  // this is a soft/asymptotic indicator of progress rather than a literal
+  // fraction of a fixed total — it keeps growing but never falsely implies
+  // "almost done" too early.
+  const progress = isComplete ? 100 : Math.min(85, 15 + questionCount * 12);
 
   const statusLabel =
     inputMode === 'speaking' ? t(lang, 'case_speaking') :

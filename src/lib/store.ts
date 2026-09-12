@@ -31,7 +31,19 @@ export interface ClinicalState {
   medications: string[];
   allergies: string[];
   associated_symptoms: string[];
+  // Free-form Q&A captured when the dynamic AI question engine asks about
+  // something specific to this complaint that doesn't fit a fixed field above
+  // (e.g. for a dog bite: which animal, vaccination status, wound care done).
+  additional_findings: { field: string; question: string; answer: string }[];
 }
+
+// The fixed/structured fields above — anything the dynamic question engine
+// asks about outside this set gets captured in `additional_findings` instead.
+export const KNOWN_CLINICAL_FIELDS: (keyof ClinicalState)[] = [
+  'chief_complaint', 'onset', 'duration', 'location', 'severity', 'character', 'radiation',
+  'aggravating_factors', 'relieving_factors', 'breathlessness', 'sweating', 'dizziness',
+  'nausea', 'previous_episode', 'past_history', 'medications', 'allergies', 'associated_symptoms',
+];
 
 export interface RedFlag {
   rule_name: string;
@@ -89,6 +101,7 @@ export const defaultClinicalState: ClinicalState = {
   medications: [],
   allergies: [],
   associated_symptoms: [],
+  additional_findings: [],
 };
 
 export const defaultSession: AppSession = {

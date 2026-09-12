@@ -1,0 +1,14 @@
+
+> medcase@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 4.9s
+ ○ Compiling /api/summary ...
+ ✓ Compiled /api/summary in 1648ms (56 modules)
+ POST /api/summary 200 in 10783ms
+^C

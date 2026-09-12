@@ -17,6 +17,11 @@ Create a comprehensive, complete, professional Physician Clinical Report based o
 Clinical State Collected:
 ${JSON.stringify(clinical_state, null, 2)}
 
+Note: "additional_findings" inside the clinical state above holds complaint-specific
+questions/answers that the dynamic intake AI asked but that don't fit the fixed fields
+(e.g. for an animal bite: which animal, vaccination status, wound care done). ALWAYS
+weave any entries found there into the narrative below — never ignore or drop them.
+
 Red Flags Detected:
 ${JSON.stringify(red_flags, null, 2)}
 
@@ -28,7 +33,7 @@ Language requested: ${isHi ? 'Hindi (Devanagari script)' : 'English'}
 Generate a structured, complete report. Return ONLY valid JSON with no markdown formatting:
 {
   "chief_complaint": "Chief complaint with duration (in ${isHi ? 'Hindi' : 'English'})",
-  "history_of_present_illness": "Detailed clinical narrative describing onset, character, severity, radiation, aggravating/relieving factors (in ${isHi ? 'Hindi' : 'English'})",
+  "history_of_present_illness": "Detailed clinical narrative describing onset, character, severity, radiation, aggravating/relieving factors, AND any complaint-specific additional_findings (in ${isHi ? 'Hindi' : 'English'})",
   "severity_assessment": {
     "score": ${clinical_state?.severity || 3},
     "level": "${clinical_state?.severity && clinical_state.severity >= 8 ? 'SEVERE' : clinical_state?.severity && clinical_state.severity >= 4 ? 'MODERATE' : 'MILD'}",
@@ -137,9 +142,21 @@ function buildCompleteFallbackSummary(
   const location = cs.location ? (isHi ? `, स्थान: ${cs.location}` : `, Site: ${cs.location}`) : '';
   const radiation = cs.radiation ? (isHi ? `, फैलाव: ${cs.radiation}` : `, Radiation: ${cs.radiation}`) : '';
 
+  // Complaint-specific Q&A that the dynamic question engine asked but that
+  // doesn't fit a fixed field (e.g. for an animal bite: which animal, wound
+  // care, vaccination status). Always fold these into the narrative so
+  // nothing gets silently dropped, even in this fully-offline fallback.
+  const additionalFindings: { field?: string; question?: string; answer?: string }[] =
+    Array.isArray(cs.additional_findings) ? cs.additional_findings : [];
+  const findingsNarrative = additionalFindings.length > 0
+    ? (isHi
+        ? ' अतिरिक्त जानकारी: ' + additionalFindings.map(f => `${f.question || f.field} — ${f.answer}`).join('; ') + '.'
+        : ' Additional findings: ' + additionalFindings.map(f => `${f.question || f.field} — ${f.answer}`).join('; ') + '.')
+    : '';
+
   const hpi = isHi
-    ? `रोगी ने "${chief}" की शिकायत दर्ज की है, जो ${onset} से है${character}${location}${radiation}। गंभीरता स्तर ${sevScore}/10 (${sevLevel}) आंका गया है।`
-    : `Patient presents with ${chief} of ${onset} duration${character}${location}${radiation}. Severity scaled at ${sevScore}/10 (${sevLevel}).`;
+    ? `रोगी ने "${chief}" की शिकायत दर्ज की है, जो ${onset} से है${character}${location}${radiation}। गंभीरता स्तर ${sevScore}/10 (${sevLevel}) आंका गया है।${findingsNarrative}`
+    : `Patient presents with ${chief} of ${onset} duration${character}${location}${radiation}. Severity scaled at ${sevScore}/10 (${sevLevel}).${findingsNarrative}`;
 
   const summaryNarrative = isHi
     ? `रोगी को ${chief} की समस्या है (${onset})। कुल गंभीरता स्तर ${sevScore}/10 (${sevLevel}) है। ${hasRedFlags ? 'चेतावनी संकेत (Red Flags) मौजूद हैं — तुरंत डॉक्टर जांच आवश्यक है।' : 'प्राथमिक जांच व लक्षणों के अनुसार डॉक्टर परामर्श की सलाह दी जाती है।'}`

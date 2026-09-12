@@ -138,6 +138,7 @@ export default function SummaryPage() {
   const [summary, setSummary] = useState<AISummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [persisted, setPersisted] = useState(false);
 
   const updateSession = (updates: Partial<typeof session>) => {
     const updated = { ...session, ...updates };
@@ -194,7 +195,47 @@ export default function SummaryPage() {
     }
   };
 
-  const handleDoctorDashboard = () => router.push('/doctor');
+  const handleNewSession = () => {
+    // Clear session and go back to landing
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('medcase_session');
+    }
+    router.push('/');
+  };
+
+  // ─── Persist entire session to Supabase once summary is ready ─────
+  const persistToSupabase = async (summaryData: AISummary) => {
+    if (persisted) return; // Only persist once
+    setPersisted(true);
+    try {
+      await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patient: session.patient,
+          clinicalState: session.clinicalState,
+          messages: session.messages,
+          redFlags: session.redFlags,
+          documents: session.documents,
+          language: session.language,
+          consultationType: session.consultationType,
+          consentGiven: session.consentGiven,
+          summary: summaryData,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to persist session to Supabase:', err);
+      // Don't block the UI if persistence fails — the patient can still see their summary
+    }
+  };
+
+  // Trigger persistence when summary becomes available
+  useEffect(() => {
+    if (summary && !persisted) {
+      persistToSupabase(summary);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summary]);
 
   const priorityColor: Record<string, string> = {
     URGENT: '#DC2626',
@@ -383,13 +424,11 @@ export default function SummaryPage() {
 
           {/* Actions */}
           <div className={styles.actions}>
-            <button id="summary-doctor-btn" className="btn btn-primary btn-lg" onClick={handleDoctorDashboard} disabled={loading}>
+            <button id="summary-new-session-btn" className="btn btn-primary btn-lg" onClick={handleNewSession} disabled={loading}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="white" strokeWidth="2"/>
-                <circle cx="9" cy="7" r="4" stroke="white" strokeWidth="2"/>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="white" strokeWidth="2"/>
+                <path d="M12 5v14M5 12h14" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              {lang === 'hi' ? 'डॉक्टर डैशबोर्ड' : 'Doctor Dashboard'}
+              {lang === 'hi' ? 'नया सत्र शुरू करें' : 'Start New Session'}
             </button>
           </div>
         </div>

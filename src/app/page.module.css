@@ -176,3 +176,25 @@
   max-width: 400px;
   line-height: 1.5;
 }
+
+/* Doctor login link */
+.doctorLoginLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.5);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font-base);
+}
+.doctorLoginLink:hover {
+  color: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.35);
+}

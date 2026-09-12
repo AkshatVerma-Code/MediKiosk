@@ -100,6 +100,18 @@ export default function LandingPage() {
         {/*<p className={styles.disclaimer}>
           This is a demonstration prototype. Not intended for autonomous clinical diagnosis.
         </p>*/}
+
+        {/* Doctor login link */}
+        <button
+          className={styles.doctorLoginLink}
+          onClick={() => router.push('/doctor/login')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2"/>
+          </svg>
+          Doctor Login
+        </button>
       </div>
     </main>
   );

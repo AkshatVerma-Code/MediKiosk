@@ -969,22 +969,6 @@ export default function CaseTakingPage() {
                     >
                       {lang === 'hi' ? 'दस्तावेज़ अपलोड करें' : 'Upload Documents'}
                     </button>
-                    <button
-                      id="case-doctor-dash-btn"
-                      className="btn btn-outline btn-lg"
-                      onClick={() => {
-                        saveSession({
-                          ...session,
-                          clinicalState,
-                          messages: messagesRef.current,
-                          redFlags,
-                          summary: JSON.stringify(generatedReport),
-                        });
-                        router.push('/doctor');
-                      }}
-                    >
-                      {lang === 'hi' ? 'डॉक्टर डैशबोर्ड' : 'Doctor Dashboard'}
-                    </button>
                   </div>
                 </div>
               ) : null}

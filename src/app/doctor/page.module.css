@@ -1,11 +1,12 @@
 .main {
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - 60px);
+  min-height: 100dvh;
+  background: var(--gray-50);
 }
 
-/* Doctor Header */
-.doctorHeader {
+/* ─── Dashboard Header ─────────────────────────────────────────────── */
+.dashHeader {
   background: var(--white);
   border-bottom: 1px solid var(--border);
   padding: 20px 24px;
@@ -16,46 +17,211 @@
   gap: 16px;
   flex-shrink: 0;
 }
-.doctorInfo {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.doctorIcon {
-  font-size: 36px;
-  width: 56px;
-  height: 56px;
-  background: var(--green-100);
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.doctorTitle {
+.headerInfo { display: flex; flex-direction: column; gap: 2px; }
+.headerTitle {
   font-size: var(--font-size-2xl);
   font-weight: 800;
   color: var(--text-primary);
 }
-.doctorSub {
+.headerSub {
   font-size: 14px;
   color: var(--text-muted);
-  margin-top: 2px;
+}
+.headerDocId {
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--gray-100);
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-left: 12px;
 }
 
-.reviewActions {
+/* ─── Detail Header ────────────────────────────────────────────────── */
+.detailHeader {
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
   display: flex;
-  gap: 10px;
   align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
 }
-.reviewBadge {
-  padding: 10px 20px;
+.backBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
   border-radius: var(--radius-md);
-  font-size: var(--font-size-lg);
+  cursor: pointer;
+  font-family: var(--font-base);
+  transition: all var(--transition-fast);
+}
+.backBtn:hover {
+  background: var(--gray-50);
+  border-color: var(--green-300);
+}
+
+/* ─── Search Bar ───────────────────────────────────────────────────── */
+.searchWrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.searchIcon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.searchInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: var(--font-size-base);
+  font-family: var(--font-base);
+  color: var(--text-primary);
+  background: transparent;
+  padding: 8px 0;
+}
+.searchInput::placeholder {
+  color: var(--text-muted);
+}
+.searchClear {
+  background: var(--gray-100);
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-muted);
+  transition: all var(--transition-fast);
+}
+.searchClear:hover {
+  background: var(--gray-200);
+  color: var(--text-primary);
+}
+
+/* ─── Cards Container ──────────────────────────────────────────────── */
+.cardsContainer {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ─── Patient Card ─────────────────────────────────────────────────── */
+.patientCard {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition-fast);
+  overflow: hidden;
+  font-family: var(--font-base);
+  box-shadow: var(--shadow-sm);
+}
+.patientCard:hover {
+  border-color: var(--green-300);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 0;
+}
+.cardAvatar {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, var(--green-400), var(--green-600));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px;
   font-weight: 700;
 }
+.cardPriority {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.cardBody {
+  padding: 12px 16px 16px;
+}
+.cardName {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.cardMeta {
+  font-size: 14px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 4px;
+}
+.cardAbha {
+  font-size: 12px;
+  color: var(--green-700);
+  background: var(--green-50);
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-top: 8px;
+  display: inline-block;
+  font-weight: 600;
+}
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.cardTime {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.cardStatus {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--gray-100);
+}
+.statusComplete {
+  color: var(--green-700);
+  background: var(--green-50);
+}
 
-/* Patient Row */
-.patientRow {
+/* ─── Patient Bar (Detail View) ────────────────────────────────────── */
+.patientBar {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -76,17 +242,17 @@
   font-weight: 700;
   flex-shrink: 0;
 }
-.patientName {
+.patientBarName {
   font-size: var(--font-size-lg);
   font-weight: 700;
   color: var(--text-primary);
 }
-.patientMeta {
+.patientBarMeta {
   font-size: 14px;
   color: var(--text-muted);
 }
 
-/* Tabs */
+/* ─── Tabs ─────────────────────────────────────────────────────────── */
 .tabs {
   display: flex;
   border-bottom: 2px solid var(--border);
@@ -121,7 +287,7 @@
   background: var(--green-50);
 }
 
-/* Content */
+/* ─── Content ──────────────────────────────────────────────────────── */
 .content {
   flex: 1;
   padding: 24px;
@@ -131,7 +297,7 @@
   margin: 0 auto;
 }
 
-/* Card */
+/* ─── Card ─────────────────────────────────────────────────────────── */
 .card {
   background: var(--white);
   border: 1px solid var(--border);
@@ -139,21 +305,22 @@
   overflow: hidden;
 }
 
-/* Summary tab rows */
+/* ─── Summary Tab Rows ─────────────────────────────────────────────── */
 .summaryRow {
   display: grid;
-  grid-template-columns: 220px 1fr 48px;
-  align-items: center;
+  grid-template-columns: 200px 1fr auto;
+  align-items: start;
   padding: 14px 20px;
   border-bottom: 1px solid var(--border);
   gap: 12px;
 }
 .summaryRow:last-child { border-bottom: none; }
 .summaryKey {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-muted);
   text-transform: capitalize;
+  padding-top: 4px;
 }
 .summaryValue {
   font-size: var(--font-size-base);
@@ -161,10 +328,34 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  align-items: flex-start;
+  min-height: 28px;
+}
+.editActions {
+  display: flex;
+  gap: 4px;
   align-items: center;
+  flex-shrink: 0;
+}
+.editTextarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 12px;
+  border: 2px solid var(--green-400);
+  border-radius: var(--radius-md);
+  font-family: var(--font-base);
+  font-size: var(--font-size-base);
+  resize: vertical;
+  outline: none;
+  background: var(--green-50);
+  color: var(--text-primary);
+}
+.editTextarea:focus {
+  border-color: var(--green-500);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
 }
 
-/* History tab */
+/* ─── History Tab ──────────────────────────────────────────────────── */
 .historyGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -192,7 +383,7 @@
   font-weight: 500;
 }
 
-/* Documents tab */
+/* ─── Documents Tab ────────────────────────────────────────────────── */
 .docHeader {
   display: flex;
   align-items: center;
@@ -202,97 +393,59 @@
   border-bottom: 1px solid var(--border);
   background: var(--gray-50);
 }
-.docSection {
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--border);
+
+/* ─── Loading & Empty States ───────────────────────────────────────── */
+.loadingWrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-.docSection h4 {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-}
-
-/* Timeline tab */
-.timeline {
-  position: relative;
-  padding-left: 32px;
-}
-.timeline::before {
-  content: '';
-  position: absolute;
-  left: 6px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--green-200);
-}
-.timelineItem {
-  position: relative;
-  margin-bottom: 28px;
-}
-.timelineDot {
-  position: absolute;
-  left: -29px;
-  top: 4px;
-  width: 12px;
-  height: 12px;
-  background: var(--green-400);
-  border-radius: 50%;
-  border: 2px solid var(--white);
-  box-shadow: 0 0 0 2px var(--green-300);
-}
-.timelineContent {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 14px 18px;
-  box-shadow: var(--shadow-sm);
-}
-.timelineDate {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--green-600);
-  margin-bottom: 8px;
-}
-.timelineEntry {
-  font-size: var(--font-size-base);
-  color: var(--text-primary);
-  padding: 4px 0;
-  border-bottom: 1px solid var(--border);
-}
-.timelineEntry:last-child { border-bottom: none; }
-
-/* Empty state */
-.empty {
-  text-align: center;
-  padding: 48px 24px;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 80px 24px;
   color: var(--text-muted);
   font-size: var(--font-size-lg);
 }
-
-/* Bottom bar */
-.bottomBar {
+.emptyState {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 14px 24px;
-  border-top: 1px solid var(--border);
-  background: var(--white);
-  flex-shrink: 0;
-}
-.fhirBadge {
-  font-size: 13px;
+  justify-content: center;
+  text-align: center;
+  padding: 80px 24px;
   color: var(--text-muted);
-  font-weight: 600;
+}
+.emptyIcon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+.emptyState h3 {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.emptyState p {
+  font-size: var(--font-size-base);
+  max-width: 400px;
+}
+.empty {
+  color: var(--text-muted);
 }
 
-@media (max-width: 640px) {
-  .historyGrid { grid-template-columns: 1fr; }
+/* ─── Responsive ───────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .cardsGrid {
+    grid-template-columns: 1fr;
+  }
+  .historyGrid {
+    grid-template-columns: 1fr;
+  }
   .historyItem { border-right: none; }
-  .summaryRow { grid-template-columns: 1fr; }
+  .summaryRow {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .editActions {
+    justify-content: flex-end;
+  }
 }

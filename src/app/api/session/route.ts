@@ -7,7 +7,7 @@ import { createServiceClient } from '@/lib/supabase';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { patient, clinicalState, messages, redFlags, documents, language, consultationType, consentGiven } = body;
+    const { patient, clinicalState, messages, redFlags, documents, language, consultationType, consentGiven, summary } = body;
 
     const supabase = createServiceClient();
 
@@ -98,6 +98,29 @@ export async function POST(req: NextRequest) {
           });
         }
       }
+    }
+
+    // 7. Save the AI-generated summary to the summaries table
+    if (summary) {
+      let summaryObj: Record<string, unknown> = {};
+      if (typeof summary === 'string') {
+        try { summaryObj = JSON.parse(summary); } catch { summaryObj = { summary_text: summary }; }
+      } else {
+        summaryObj = summary;
+      }
+
+      const priority = typeof summaryObj.priority === 'string'
+        && ['URGENT', 'HIGH', 'ROUTINE'].includes(summaryObj.priority)
+        ? summaryObj.priority
+        : 'ROUTINE';
+
+      await supabase.from('summaries').insert({
+        session_id: sessionId,
+        summary_json: summaryObj,
+        summary_text: typeof summaryObj.summary_text === 'string' ? summaryObj.summary_text : null,
+        priority,
+        status: 'pending',
+      });
     }
 
     return NextResponse.json({ success: true, session_id: sessionId, patient_id: patientRow.id });

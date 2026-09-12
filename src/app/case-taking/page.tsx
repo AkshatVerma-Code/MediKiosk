@@ -11,6 +11,43 @@ import { getDiseaseSpecificQuestion, calculateScaledSeverity, SeverityLevel } fr
 import { v4 as uuidv4 } from 'uuid';
 import styles from './page.module.css';
 
+/**
+ * Recursively converts any non-primitive value in a report object to a safe
+ * renderable string. This prevents "Objects are not valid as a React child"
+ * errors when the AI returns nested objects instead of flat strings.
+ */
+function sanitizeReport(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val == null || typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+      result[key] = val;
+    } else if (Array.isArray(val)) {
+      result[key] = val.map((item) => {
+        if (item == null || typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') return item;
+        if (typeof item === 'object') return sanitizeReport(item as Record<string, unknown>);
+        return String(item);
+      });
+    } else if (typeof val === 'object') {
+      // For known string fields that the AI may mistakenly return as objects,
+      // flatten the object into a readable string
+      const knownStringFields = [
+        'chief_complaint', 'history_of_present_illness', 'summary_text', 'ai_disclaimer',
+        'priority', 'onset', 'character', 'location', 'radiation',
+      ];
+      if (knownStringFields.includes(key)) {
+        result[key] = Object.entries(val as Record<string, unknown>)
+          .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`)
+          .join('. ');
+      } else {
+        result[key] = sanitizeReport(val as Record<string, unknown>);
+      }
+    } else {
+      result[key] = String(val);
+    }
+  }
+  return result;
+}
+
 type InputMode = 'idle' | 'speaking' | 'listening' | 'processing' | 'asking';
 
 interface BrowserSpeechRecognition {
@@ -426,7 +463,9 @@ export default function CaseTakingPage() {
 
       if (resp.ok) {
         const data = await resp.json();
-        const summaryData = data.summary;
+        // Sanitize the report so any nested objects the AI returned are
+        // flattened into strings before React tries to render them.
+        const summaryData = sanitizeReport(data.summary as Record<string, unknown>);
         setGeneratedReport(summaryData);
         const updSession = {
           ...session,

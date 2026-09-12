@@ -22,6 +22,114 @@ interface AISummary {
   ai_disclaimer?: string;
 }
 
+/**
+ * Safely converts any value to a displayable string.
+ * Handles cases where the AI returns an object instead of a string field.
+ */
+function toSafeString(val: unknown): string {
+  if (val == null) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+  if (Array.isArray(val)) return val.map(toSafeString).join('; ');
+  if (typeof val === 'object') {
+    // Flatten object values into a readable narrative
+    return Object.entries(val as Record<string, unknown>)
+      .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${toSafeString(v)}`)
+      .join('. ');
+  }
+  return String(val);
+}
+
+/**
+ * Safely converts any value to a string array.
+ * Handles cases where the AI returns an object or a plain string instead of an array.
+ */
+function toSafeStringArray(val: unknown): string[] {
+  if (val == null) return [];
+  if (Array.isArray(val)) return val.map(toSafeString).filter(Boolean);
+  if (typeof val === 'string') return val ? [val] : [];
+  if (typeof val === 'object') {
+    // Flatten object values
+    return Object.entries(val as Record<string, unknown>)
+      .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${toSafeString(v)}`)
+      .filter(Boolean);
+  }
+  return [String(val)];
+}
+
+/**
+ * Sanitizes the raw AI summary to ensure all fields are the expected primitive types.
+ * This prevents "Objects are not valid as a React child" runtime errors when the AI
+ * hallucinates a nested object structure instead of a flat string.
+ */
+function sanitizeSummary(raw: Record<string, unknown>): AISummary {
+  // Normalize severity_assessment — it might itself be a nested object or a string
+  let severityAssessment: AISummary['severity_assessment'] = undefined;
+  const rawSev = raw.severity_assessment;
+  if (rawSev && typeof rawSev === 'object' && !Array.isArray(rawSev)) {
+    const sev = rawSev as Record<string, unknown>;
+    severityAssessment = {
+      score: typeof sev.score === 'number' ? sev.score : undefined,
+      level: typeof sev.level === 'string' ? sev.level : toSafeString(sev.level),
+      description: toSafeString(sev.description),
+    };
+  } else if (rawSev != null) {
+    severityAssessment = { description: toSafeString(rawSev) };
+  }
+
+  // Normalize medications — each entry should be { name, dose?, frequency? }
+  const rawMeds = raw.current_medications;
+  const medications: AISummary['current_medications'] = Array.isArray(rawMeds)
+    ? rawMeds.map((m) => {
+        if (m && typeof m === 'object' && !Array.isArray(m)) {
+          const mo = m as Record<string, unknown>;
+          return {
+            name: toSafeString(mo.name || mo.drug || mo.medication || Object.values(mo)[0]),
+            dose: mo.dose != null ? toSafeString(mo.dose) : undefined,
+            frequency: mo.frequency != null ? toSafeString(mo.frequency) : undefined,
+          };
+        }
+        return { name: toSafeString(m) };
+      })
+    : rawMeds != null
+    ? [{ name: toSafeString(rawMeds) }]
+    : [];
+
+  // Normalize investigations
+  const rawInv = raw.relevant_investigations;
+  const investigations: AISummary['relevant_investigations'] = Array.isArray(rawInv)
+    ? rawInv.map((inv) => {
+        if (inv && typeof inv === 'object' && !Array.isArray(inv)) {
+          const io = inv as Record<string, unknown>;
+          return {
+            name: toSafeString(io.name || Object.values(io)[0]),
+            value: io.value != null ? toSafeString(io.value) : undefined,
+            status: io.status != null ? toSafeString(io.status) : undefined,
+          };
+        }
+        return { name: toSafeString(inv) };
+      })
+    : [];
+
+  const validPriorities = ['URGENT', 'HIGH', 'ROUTINE'];
+  const rawPriority = toSafeString(raw.priority).toUpperCase();
+
+  return {
+    chief_complaint: toSafeString(raw.chief_complaint) || undefined,
+    history_of_present_illness: toSafeString(raw.history_of_present_illness) || undefined,
+    severity_assessment: severityAssessment,
+    associated_symptoms: toSafeStringArray(raw.associated_symptoms),
+    past_medical_history: toSafeStringArray(raw.past_medical_history),
+    current_medications: medications,
+    relevant_investigations: investigations,
+    red_flags: toSafeStringArray(raw.red_flags),
+    priority: validPriorities.includes(rawPriority) ? (rawPriority as AISummary['priority']) : undefined,
+    recommended_actions: toSafeStringArray(raw.recommended_actions),
+    summary_text: toSafeString(raw.summary_text) || undefined,
+    ai_disclaimer: toSafeString(raw.ai_disclaimer) || undefined,
+  };
+}
+
 export default function SummaryPage() {
   const router = useRouter();
   const [session, setSession] = useState(loadSession());
@@ -41,7 +149,8 @@ export default function SummaryPage() {
     if (session.summary) {
       try {
         const parsed = JSON.parse(session.summary);
-        setSummary(parsed);
+        // Sanitize to ensure no raw objects slip through to React rendering
+        setSummary(sanitizeSummary(parsed as Record<string, unknown>));
         setLoading(false);
         if (session.documents && session.documents.length > 0) {
           generateSummary();
@@ -69,8 +178,12 @@ export default function SummaryPage() {
 
       if (resp.ok) {
         const data = await resp.json();
-        setSummary(data.summary);
-        updateSession({ summary: JSON.stringify(data.summary) });
+        // Sanitize AI response before rendering — the model sometimes returns
+        // nested objects (e.g. history_of_present_illness as an object) instead
+        // of the expected flat strings, which causes React to throw.
+        const safe = sanitizeSummary(data.summary as Record<string, unknown>);
+        setSummary(safe);
+        updateSession({ summary: JSON.stringify(safe) });
       } else {
         setError(true);
       }

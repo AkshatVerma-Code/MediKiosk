@@ -685,6 +685,12 @@ function CaseTakingContent() {
       const updSession = { ...session, clinicalState: newState, messages: messagesRef.current, redFlags: flags };
       saveSession(updSession);
 
+      // If a severe red flag is detected, skip remaining questions immediately
+      if (flags.some(f => f.severity === 'HIGH')) {
+        await finishInterview(newState, flags);
+        return;
+      }
+
       const newCount = questionCount + 1;
       setQuestionCount(newCount);
       await fetchNextQuestion(newState, messagesRef.current, newCount);

@@ -3,11 +3,21 @@
   gap: 16px;
   border-radius: var(--radius-md);
   padding: 20px 24px;
-  margin-bottom: 16px;
-  position: relative;
-  animation: fadeInUp 0.4s ease;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 500px;
+  z-index: 9999;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 0 0 100vw rgba(0, 0, 0, 0.2);
+  animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
+@keyframes popIn {
+  from { opacity: 0; transform: translate(-50%, -40%) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
 .high {
   background: linear-gradient(135deg, #FEF2F2, #FEE2E2);
   border: 2px solid #FCA5A5;

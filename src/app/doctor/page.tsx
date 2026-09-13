@@ -414,13 +414,28 @@ export default function DoctorDashboardPage() {
                         {doc.extractedData && (
                           <div style={{ padding: '12px 20px' }}>
                             {Object.entries(doc.extractedData)
-                              .filter(([k]) => !['raw_text', 'confidence'].includes(k))
+                              .filter(([k, v]) => {
+                                if (['raw_text', 'confidence'].includes(k)) return false;
+                                if (Array.isArray(v) && v.length === 0) return false;
+                                if (!v) return false;
+                                return true;
+                              })
                               .map(([k, v]) => (
                                 <div key={k} style={{ marginBottom: 8 }}>
                                   <strong style={{ textTransform: 'capitalize' }}>{k.replace(/_/g, ' ')}:</strong>{' '}
-                                  {toSafeString(v) || '—'}
+                                  {toSafeString(v)}
                                 </div>
                               ))}
+                              
+                            {/* Ensure raw OCR text is visible for verification */}
+                            {doc.rawText && (
+                              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                                <strong style={{ display: 'block', marginBottom: 8, color: 'var(--text-muted)' }}>Raw Document Text (OCR):</strong>
+                                <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: 12, borderRadius: 6, margin: 0 }}>
+                                  {doc.rawText}
+                                </pre>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

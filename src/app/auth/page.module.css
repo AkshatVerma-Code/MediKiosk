@@ -1,10 +1,11 @@
 .card {
   background: var(--white);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
-  padding: 40px;
+  box-shadow: 0 16px 48px rgba(13, 40, 20, 0.1);
+  border: 1px solid rgba(201, 208, 201, 0.8);
+  padding: 40px 36px;
   width: 100%;
-  max-width: 580px;
+  max-width: 620px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -13,49 +14,90 @@
 .header {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
 }
+
 .iconWrap {
   width: 64px;
   height: 64px;
-  background: var(--green-100);
-  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #E8F5E9, #C8E6C9);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--green-600);
+  color: #1E5B2B;
   flex-shrink: 0;
-}
-.title {
-  font-size: var(--font-size-2xl);
-  font-weight: 800;
-  color: var(--text-primary);
-}
-.subtitle {
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
-  margin-top: 2px;
+  box-shadow: 0 4px 12px rgba(45, 122, 58, 0.15);
 }
 
-.demoBanner {
+.title {
+  font-size: var(--font-size-3xl);
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: var(--font-size-base);
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* Pathway selection */
+.pathwayGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  width: 100%;
+}
+
+.pathwayCard {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  background: var(--green-50);
-  border: 1px solid var(--green-200);
-  border-radius: var(--radius-md);
-  padding: 12px 16px;
+  gap: 12px;
+  padding: 16px 14px;
+  border: 2px solid #E5E7EB;
+  border-radius: 14px;
+  background: #FFFFFF;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
 }
-.demoLabel {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--green-600);
+
+.pathwayCard:hover {
+  border-color: #86EFAC;
+  background: #F0FDF4;
+}
+
+.pathwayCardActive {
+  border-color: #2D7A3A;
+  background: #F0FDF4;
+  box-shadow: 0 0 0 2px rgba(45, 122, 58, 0.18);
+}
+
+.pathwayInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pathwayTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.pathwayDesc {
+  font-size: 12px;
+  color: #6B7280;
+  font-weight: 500;
 }
 
 .form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
 }
 
 .field {
@@ -66,23 +108,20 @@
 
 .label {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
-}
-.optional {
-  font-weight: 400;
-  color: var(--text-muted);
-  font-size: 13px;
 }
 
 .inputError {
   border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15) !important;
 }
 
 .error {
   font-size: 13px;
   color: var(--danger);
-  font-weight: 500;
+  font-weight: 600;
+  margin: 2px 0 0 0;
 }
 
 .row {
@@ -91,29 +130,51 @@
   align-items: flex-start;
 }
 
-.genderGroup {
-  display: flex;
-  border: 2px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  height: 56px;
+.genderGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
-.genderBtn {
-  flex: 1;
-  background: transparent;
-  border: none;
-  border-right: 1px solid var(--border);
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-secondary);
+
+.genderCard {
+  background: var(--white);
+  border: 2px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   cursor: pointer;
   transition: all var(--transition-fast);
-  font-family: var(--font-base);
+  min-height: 60px;
 }
-.genderBtn:last-child { border-right: none; }
-.genderBtn:hover { background: var(--green-50); color: var(--green-600); }
-.genderActive {
-  background: var(--green-500) !important;
-  color: white !important;
-  font-weight: 600;
+
+.genderCard:hover {
+  border-color: #86EFAC;
+  background: #F0FDF4;
+}
+
+.genderCardActive {
+  border-color: #2D7A3A;
+  background: #F0FDF4;
+  box-shadow: 0 0 0 2px rgba(45, 122, 58, 0.15);
+}
+
+.genderIconWrap {
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.genderCardActive .genderIconWrap {
+  color: #1E5B2B;
+}
+
+.genderText {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
 }

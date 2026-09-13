@@ -9,6 +9,24 @@ import { t } from '@/lib/translations';
 import { detectRedFlags } from '@/lib/redFlagRules';
 import { getDiseaseSpecificQuestion, calculateScaledSeverity, SeverityLevel } from '@/lib/questionEngine';
 import { v4 as uuidv4 } from 'uuid';
+import { KioskVoiceMic } from '@/components/KioskVoiceMic';
+import {
+  Thermometer,
+  Wind,
+  Activity,
+  CircleDot,
+  Zap,
+  AlertCircle,
+  RotateCcw,
+  HeartPulse,
+  Volume2,
+  VolumeX,
+  FileText,
+  AlertTriangle,
+  Keyboard,
+  CheckCircle2,
+  ArrowRight,
+} from 'lucide-react';
 import styles from './page.module.css';
 
 /**
@@ -75,9 +93,24 @@ interface DynamicQuestion {
 const MAX_QUESTIONS = 12;
 
 export default function CaseTakingPage() {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+  
+  if (!isMounted) return null;
+  return <CaseTakingContent />;
+}
+
+function CaseTakingContent() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [session, setSession] = useState(loadSession());
   const lang = session.language;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [clinicalState, setClinicalState] = useState<ClinicalState>(
@@ -104,7 +137,10 @@ export default function CaseTakingPage() {
   const messagesRef = useRef<ConversationMessage[]>([]);
   const voiceEnabledRef = useRef(true);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const speechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const speechRecognitionRef = useRef<any | null>(null);
+  const recordedMimeTypeRef = useRef<string>('audio/webm');
+  const browserTranscriptRef = useRef<string>('');
+  const hasSpokenRef = useRef<boolean>(false);
   const audioChunksRef = useRef<Blob[]>([]);
   const skipProcessRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -207,7 +243,7 @@ export default function CaseTakingPage() {
     }
   }
 
-  // ─── Silence detection while the mic is listening ─────────────────────────
+  // ─── Silence detection & Voice Activity Watcher while the mic is listening ──
   function cleanupSilenceWatch() {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
     if (silenceFallbackTimerRef.current) { window.clearTimeout(silenceFallbackTimerRef.current); silenceFallbackTimerRef.current = null; }
@@ -218,19 +254,18 @@ export default function CaseTakingPage() {
     skipProcessRef.current = discard;
     cleanupSilenceWatch();
     if (speechRecognitionRef.current) {
-      const recognition = speechRecognitionRef.current;
-      speechRecognitionRef.current = null;
       try {
-        if (discard && recognition.abort) recognition.abort();
-        else recognition.stop();
+        if (discard) speechRecognitionRef.current.abort?.();
+        else speechRecognitionRef.current.stop?.();
       } catch {}
-      if (discard) setInputMode('idle');
-      return;
+      speechRecognitionRef.current = null;
     }
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== 'inactive') {
       setInputMode(discard ? 'idle' : 'processing');
       try { recorder.stop(); } catch {}
+    } else if (discard) {
+      setInputMode('idle');
     }
   }
 
@@ -247,31 +282,59 @@ export default function CaseTakingPage() {
       const data = new Uint8Array(analyser.frequencyBinCount);
       const startedAt = Date.now();
       let silenceStart: number | null = null;
-      const THRESHOLD = 6;      // RMS amplitude below this counts as silence
-      const MIN_MS = 900;       // always record at least this long
-      const SILENCE_MS = 1700;  // stop after this much continuous silence
-      const MAX_MS = 20000;     // hard cap so we never listen forever
+      let hasSpoken = false;
+
+      // Intelligent thresholds for kiosk audio
+      const SPEECH_THRESHOLD = 8;          // RMS amplitude indicating human voice
+      const SILENCE_THRESHOLD = 5;         // RMS amplitude below this counts as quiet
+      const INITIAL_MAX_SILENCE_MS = 8000; // Allow user 8s to start speaking before returning to idle
+      const TRAILING_SILENCE_MS = 2200;    // 2.2s of silence after speech indicates user is done
+      const MAX_RECORDING_MS = 25000;      // 25s hard safety limit
 
       const tick = () => {
         analyser.getByteTimeDomainData(data);
         let sum = 0;
-        for (let i = 0; i < data.length; i++) { const v = data[i] - 128; sum += v * v; }
+        for (let i = 0; i < data.length; i++) {
+          const v = data[i] - 128;
+          sum += v * v;
+        }
         const rms = Math.sqrt(sum / data.length);
         const elapsed = Date.now() - startedAt;
 
-        if (rms < THRESHOLD) {
-          if (silenceStart === null) silenceStart = Date.now();
-          if (elapsed > MIN_MS && Date.now() - silenceStart > SILENCE_MS) { stopListening(); return; }
+        if (!hasSpoken) {
+          if (rms >= SPEECH_THRESHOLD) {
+            hasSpoken = true;
+            hasSpokenRef.current = true;
+            silenceStart = null;
+          } else if (elapsed > INITIAL_MAX_SILENCE_MS) {
+            // Patient hasn't started speaking within 8 seconds — cleanly return to idle without showing an error
+            stopListening(true);
+            return;
+          }
         } else {
-          silenceStart = null;
+          // Patient has started speaking; monitor for trailing pause
+          if (rms < SILENCE_THRESHOLD) {
+            if (silenceStart === null) silenceStart = Date.now();
+            if (Date.now() - silenceStart > TRAILING_SILENCE_MS) {
+              stopListening(false);
+              return;
+            }
+          } else {
+            silenceStart = null;
+          }
         }
-        if (elapsed > MAX_MS) { stopListening(); return; }
+
+        if (elapsed > MAX_RECORDING_MS) {
+          stopListening(false);
+          return;
+        }
+
         rafRef.current = requestAnimationFrame(tick);
       };
       rafRef.current = requestAnimationFrame(tick);
     } catch {
-      // Silence detection unsupported on this browser — fall back to a fixed max duration.
-      silenceFallbackTimerRef.current = window.setTimeout(() => stopListening(), 8000);
+      // AudioContext unsupported or blocked — fall back to a generous 12s duration
+      silenceFallbackTimerRef.current = window.setTimeout(() => stopListening(false), 12000);
     }
   }
 
@@ -279,70 +342,77 @@ export default function CaseTakingPage() {
     if (isProcessingAnswerRef.current || inputMode === 'processing' || inputMode === 'asking') return;
     interruptSpeech();
     try {
-      const speechWindow = window as unknown as {
-        SpeechRecognition?: new () => BrowserSpeechRecognition;
-        webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
-      };
-      const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        if (speechRecognitionRef.current) {
-          try { speechRecognitionRef.current.abort?.(); } catch {}
-          speechRecognitionRef.current = null;
-        }
-
-        const recognition = new SpeechRecognition();
-        recognition.lang = lang === 'hi' ? 'hi-IN' : 'en-IN';
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        let handled = false;
-
-        recognition.onresult = event => {
-          if (handled || isProcessingAnswerRef.current) return;
-          const transcript = Array.from(event.results)
-            .map(result => result[0]?.transcript || '')
-            .join(' ')
-            .trim();
-          if (transcript) {
-            handled = true;
-            try { recognition.stop(); } catch {}
-            speechRecognitionRef.current = null;
-            processAnswer(transcript);
-          }
-        };
-        recognition.onerror = () => {
-          if (handled) return;
-          speechRecognitionRef.current = null;
-          setInputMode('idle');
-          setMicHint(lang === 'hi'
-            ? 'माइक से आवाज़ नहीं मिली। कृपया फिर से बोलें या नीचे विकल्प चुनें।'
-            : 'No voice was heard. Please try again or tap an option below.');
-        };
-        recognition.onend = () => {
-          speechRecognitionRef.current = null;
-          if (!handled && !isProcessingAnswerRef.current && inputMode === 'listening') setInputMode('idle');
-        };
-        speechRecognitionRef.current = recognition;
-        setMicHint(null);
-        setInputMode('listening');
-        recognition.start();
-        return;
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
       setMicHint(null);
-      const recorder = new MediaRecorder(stream);
+      hasSpokenRef.current = false;
+      browserTranscriptRef.current = '';
+
+      // Determine best supported MIME type
+      let chosenMime = 'audio/webm;codecs=opus';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          chosenMime = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          chosenMime = 'audio/webm';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          chosenMime = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+          chosenMime = 'audio/aac';
+        } else {
+          chosenMime = '';
+        }
+      }
+      recordedMimeTypeRef.current = chosenMime || 'audio/webm';
+
+      const recorder = chosenMime ? new MediaRecorder(stream, { mimeType: chosenMime }) : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
       skipProcessRef.current = false;
-      recorder.ondataavailable = e => audioChunksRef.current.push(e.data);
+
+      recorder.ondataavailable = e => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
       recorder.onstop = async () => {
         stream.getTracks().forEach(tr => tr.stop());
         cleanupSilenceWatch();
-        if (skipProcessRef.current) { skipProcessRef.current = false; return; }
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (speechRecognitionRef.current) {
+          try { speechRecognitionRef.current.stop?.(); } catch {}
+          speechRecognitionRef.current = null;
+        }
+        if (skipProcessRef.current) {
+          skipProcessRef.current = false;
+          setInputMode('idle');
+          return;
+        }
+        const blob = new Blob(audioChunksRef.current, { type: recordedMimeTypeRef.current });
         await processVoice(blob);
       };
-      recorder.start();
+
+      // Optional Web Speech API parallel fallback (in supported browsers)
+      try {
+        const SpeechRec = (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any }).SpeechRecognition ||
+          (window as unknown as { webkitSpeechRecognition?: any }).webkitSpeechRecognition;
+        if (SpeechRec) {
+          const recognition = new SpeechRec();
+          recognition.lang = lang === 'hi' ? 'hi-IN' : 'en-IN';
+          recognition.continuous = false;
+          recognition.interimResults = false;
+          recognition.maxAlternatives = 1;
+          recognition.onresult = (event: any) => {
+            const transcript = event.results?.[0]?.[0]?.transcript;
+            if (transcript) browserTranscriptRef.current = transcript;
+          };
+          recognition.onerror = () => {};
+          recognition.onend = () => {};
+          speechRecognitionRef.current = recognition;
+          recognition.start();
+        }
+      } catch {}
+
+      recorder.start(250); // Continually buffer chunks every 250ms
       setInputMode('listening');
       startSilenceWatch(stream);
     } catch {
@@ -354,18 +424,46 @@ export default function CaseTakingPage() {
   }
 
   async function processVoice(blob: Blob) {
+    // If the recording is empty/negligible and user didn't speak
+    if (!blob || blob.size < 1200) {
+      if (browserTranscriptRef.current && browserTranscriptRef.current.trim()) {
+        await processAnswer(browserTranscriptRef.current.trim());
+        return;
+      }
+      if (!hasSpokenRef.current) {
+        setInputMode('idle');
+        return;
+      }
+    }
+
+    setInputMode('processing');
+
+    // 1. Try Sarvam AI STT
     try {
       const formData = new FormData();
-      formData.append('audio', blob, 'recording.webm');
+      const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : blob.type.includes('wav') ? 'wav' : 'webm';
+      formData.append('audio', blob, `recording.${ext}`);
       formData.append('lang', lang);
+
       const resp = await fetch('/api/stt', { method: 'POST', body: formData });
       if (resp.ok) {
         const data = await resp.json();
-        if (data.transcript?.trim()) { await processAnswer(data.transcript); return; }
+        if (data.transcript && data.transcript.trim()) {
+          await processAnswer(data.transcript.trim());
+          return;
+        }
       }
-    } catch {
-      // fall through to retry prompt below
+    } catch (err) {
+      console.error('STT API error:', err);
     }
+
+    // 2. Fallback to Browser Speech Recognition transcript if Sarvam failed or returned empty
+    if (browserTranscriptRef.current && browserTranscriptRef.current.trim()) {
+      await processAnswer(browserTranscriptRef.current.trim());
+      return;
+    }
+
+    // 3. Prompt user cleanly if voice was not understood
     setInputMode('idle');
     setMicHint(lang === 'hi'
       ? 'समझ नहीं आया। कृपया फिर से बोलें या नीचे विकल्प चुनें।'
@@ -405,6 +503,8 @@ export default function CaseTakingPage() {
       }
 
       // Display question & options IMMEDIATELY without waiting for audio
+      // Clear previous answer pill before showing the next question (voice state machine: SUCCESS -> NEXT QUESTION)
+      setLastAnswer('');
       setCurrentQuestion(q);
       addAIMessage(q.question, q.options);
       setInputMode('idle');
@@ -424,6 +524,7 @@ export default function CaseTakingPage() {
         await finishInterview(state);
         return;
       }
+      setLastAnswer('');
       setCurrentQuestion(fallback);
       addAIMessage(fallback.question, fallback.options);
       setInputMode('idle');
@@ -509,7 +610,7 @@ export default function CaseTakingPage() {
       (async () => {
         await speak(greeting);
         if (!isProcessingAnswerRef.current) {
-          await startListening();
+          setInputMode('idle');
         }
       })();
     }
@@ -732,15 +833,21 @@ export default function CaseTakingPage() {
   // "almost done" too early.
   const progress = isComplete ? 100 : Math.min(85, 15 + questionCount * 12);
 
-  const statusLabel =
-    inputMode === 'speaking' ? t(lang, 'case_speaking') :
-    inputMode === 'listening' ? t(lang, 'case_listening') :
-    inputMode === 'processing' ? t(lang, 'case_processing') :
-    inputMode === 'asking' ? t(lang, 'case_thinking') :
-    !isComplete ? t(lang, 'case_tap_to_speak') : '';
+  const isChiefComplaintPhase = !clinicalState.chief_complaint && questionCount === 0;
+
+  const quickSymptoms = [
+    { icon: <Thermometer size={22} strokeWidth={2.2} color="#DC2626" />, label: t(lang, 'chief_fever') },
+    { icon: <Wind size={22} strokeWidth={2.2} color="#2563EB" />, label: t(lang, 'chief_cough') },
+    { icon: <Activity size={22} strokeWidth={2.2} color="#D97706" />, label: t(lang, 'chief_stomach') },
+    { icon: <CircleDot size={22} strokeWidth={2.2} color="#7C3AED" />, label: t(lang, 'chief_headache') },
+    { icon: <Zap size={22} strokeWidth={2.2} color="#EA580C" />, label: t(lang, 'chief_bodyache') },
+    { icon: <AlertCircle size={22} strokeWidth={2.2} color="#059669" />, label: t(lang, 'chief_vomiting') },
+    { icon: <RotateCcw size={22} strokeWidth={2.2} color="#4B5563" />, label: t(lang, 'chief_weakness') },
+    { icon: <HeartPulse size={22} strokeWidth={2.2} color="#DC2626" />, label: t(lang, 'chief_chest_pain') },
+  ];
 
   return (
-    <div className="page-container">
+    <div className="page-container" style={{ height: '100dvh', maxHeight: '100dvh', overflow: 'hidden' }}>
       <AccessibilityBar
         lang={lang}
         onLangChange={(l) => updateSession({ language: l })}
@@ -752,38 +859,37 @@ export default function CaseTakingPage() {
         {/* Top bar */}
         <div className={styles.topBar}>
           <div>
-            <h1 className={styles.topTitle}>{t(lang, 'case_title')}</h1>
-            {session.patient && (
-              <p className={styles.topPatient}>{session.patient.name} · {session.patient.age} {lang === 'hi' ? 'वर्ष' : 'yrs'}</p>
+            <div className={styles.topTitle}>
+              {lang === 'hi' ? 'स्वास्थ्य इतिहास' : 'Clinical History'}
+            </div>
+            {mounted && session.patient && (
+              <div className={styles.topPatient}>
+                {session.patient.name} · {session.patient.age} {lang === 'hi' ? 'वर्ष' : 'yrs'} · {session.patient.gender}
+              </div>
             )}
           </div>
-          <div className={styles.progressWrap}>
-            {/* Live Scaled Severity Badge */}
-            <div className={styles.severityWrap} title={lang === 'hi' ? 'स्वतः गंभीर स्तर (Auto-scaled severity)' : 'Auto-scaled severity'}>
-              <span className={styles.severityTitle}>{lang === 'hi' ? 'गंभीरता' : 'Severity'}:</span>
-              <span className={`${styles.severityBadgeLive} ${styles[`sev_${severityLevel.toLowerCase()}`] || styles.sev_mild}`}>
-                <span className={styles.severityDot} />
-                {severityLevel === 'MILD' && (lang === 'hi' ? 'सामान्य' : 'Mild')}
-                {severityLevel === 'MODERATE' && (lang === 'hi' ? 'मध्यम' : 'Moderate')}
-                {severityLevel === 'SEVERE' && (lang === 'hi' ? 'गंभीर' : 'Severe')}
-                {severityLevel === 'CRITICAL' && (lang === 'hi' ? 'अति-गंभीर' : 'Critical')}
-              </span>
-            </div>
 
+          <div className={styles.progressWrap}>
             <button
               className={styles.voiceToggleBtn}
               onClick={() => setVoiceEnabled(v => !v)}
-              aria-label={voiceEnabled ? 'Mute AI voice' : 'Unmute AI voice'}
-              title={voiceEnabled ? (lang === 'hi' ? 'AI आवाज़ बंद करें' : 'Mute AI voice') : (lang === 'hi' ? 'AI आवाज़ चालू करें' : 'Unmute AI voice')}
+              title={voiceEnabled ? 'Mute voice output' : 'Enable voice output'}
+              aria-label={voiceEnabled ? 'Mute voice output' : 'Enable voice output'}
             >
-              {voiceEnabled ? '🔊' : '🔇'}
+              {voiceEnabled ? <Volume2 size={18} strokeWidth={2} /> : <VolumeX size={18} strokeWidth={2} />}
             </button>
             <div className={styles.progressLabel}>
               {isComplete
-                ? (lang === 'hi' ? 'पूर्ण' : 'Complete')
-                : (lang === 'hi' ? `प्रश्न ${questionCount + 1}` : `Question ${questionCount + 1}`)}
+                ? (lang === 'hi' ? 'परामर्श पूर्ण' : 'Consultation Complete')
+                : isChiefComplaintPhase
+                ? (lang === 'hi' ? 'शुरुआती समस्या' : 'Chief Problem')
+                : questionCount < 4
+                ? (lang === 'hi' ? 'शुरू हो रहे हैं…' : 'Getting started…')
+                : questionCount < 8
+                ? (lang === 'hi' ? 'थोड़े सवाल बचे हैं' : 'A few questions left')
+                : (lang === 'hi' ? 'लगभग पूरा' : 'Almost done')}
             </div>
-            <div className="progress-bar-track" style={{ width: 120 }}>
+            <div className="progress-bar-track" style={{ width: 140 }}>
               <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
             </div>
           </div>
@@ -797,52 +903,72 @@ export default function CaseTakingPage() {
         )}
 
         {/* Voice-first conversation stage */}
-        <div className={styles.stage}>
+        <div className={`${styles.stage} ${isComplete ? styles.stageComplete : ''}`}>
           {currentQuestion && !isComplete && (
-            <p className={styles.questionCaption}>{currentQuestion.question}</p>
+            <div
+              className={styles.questionBubble}
+              data-read-aloud="true"
+            >
+              <p className={styles.questionText}>
+                {isChiefComplaintPhase ? t(lang, 'chief_prompt') : currentQuestion.question}
+              </p>
+              <button
+                className={styles.replaySpeechBtn}
+                onClick={() => speak(isChiefComplaintPhase ? t(lang, 'chief_prompt') : currentQuestion.question)}
+                aria-label={lang === 'hi' ? 'दोबारा सुनें' : 'Listen again'}
+                title={lang === 'hi' ? 'दोबारा सुनें' : 'Listen again'}
+              >
+                <Volume2 size={22} strokeWidth={2} />
+              </button>
+            </div>
           )}
           {isComplete && (
             <p className={styles.questionCaption}>
-              {lang === 'hi' ? 'आपकी जानकारी पूरी हो गई है।' : 'Your history collection is complete.'}
+              {lang === 'hi' ? 'आपके सभी उत्तर दर्ज हो गए हैं।' : 'Your answers are all recorded.'}
             </p>
           )}
 
-          <div className={styles.avatarWrap}>
-            <div className={`${styles.avatarRing} ${styles['state_' + inputMode]}`}>
-              <div className={styles.avatarCore}>
-                <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="white" opacity="0.95" />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </div>
-              {(inputMode === 'processing' || inputMode === 'asking' || (isComplete && reportLoading)) && (
-                <div className={styles.avatarSpinner}><div className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} /></div>
-              )}
-            </div>
-          </div>
-
-          {micHint ? (
-            <p className={styles.micHintText}>{micHint}</p>
-          ) : (
-            <p className={styles.statusLabel}>{statusLabel}</p>
+          {/* Hero Microphone Interaction (Reusable 4-state KioskVoiceMic) */}
+          {!isComplete && (
+            <KioskVoiceMic
+              state={
+                inputMode === 'listening'
+                  ? 'listening'
+                  : inputMode === 'processing' || inputMode === 'asking' || reportLoading
+                  ? 'processing'
+                  : inputMode === 'speaking'
+                  ? 'speaking'
+                  : 'idle'
+              }
+              lang={lang}
+              onStart={startListening}
+              onStop={() => stopListening(false)}
+              onSpeakAgain={startListening}
+              recognizedText={lastAnswer}
+              hint={micHint}
+              exampleText={
+                isChiefComplaintPhase
+                  ? (lang === 'hi' ? 'उदाहरण: "मुझे 3 दिन से बुखार है"' : 'Example: “I have had a fever for 3 days.”')
+                  : (lang === 'hi' ? 'अपना उत्तर बोलें या विकल्प चुनें' : 'Speak your answer or tap an option')
+              }
+            />
           )}
 
-          {lastAnswer && !isComplete && (
-            <p className={styles.answerCaption}>“{lastAnswer}”</p>
-          )}
 
           {/* Complete Clinical Report Card generated right after disease questions finish */}
           {isComplete && (
             <div className={styles.reportPreviewCard}>
               <div className={styles.reportHeader}>
                 <div className={styles.reportTitleWrap}>
-                  <span className={styles.reportIcon}>📋</span>
+                  <div className={styles.reportIcon}>
+                    <FileText size={26} strokeWidth={2.2} color="#1E5B2B" />
+                  </div>
                   <div>
                     <h2 className={styles.reportTitle}>
-                      {lang === 'hi' ? 'रोगी पूर्ण चिकित्सा रिपोर्ट' : 'Complete Patient Clinical Report'}
+                      {lang === 'hi' ? 'आपका चिकित्सा इतिहास सारांश' : 'Medical History Summary'}
                     </h2>
                     <p className={styles.reportSubtitle}>
-                      {lang === 'hi' ? 'बीमारी के प्रश्नों के आधार पर तैयार संपूर्ण रिपोर्ट' : 'Complete clinical report generated from disease assessment'}
+                      {lang === 'hi' ? 'AI-सहायक इतिहास सारांश — चिकित्सक समीक्षा आवश्यक' : 'AI-assisted history summary — physician review required'}
                     </p>
                   </div>
                 </div>
@@ -855,15 +981,28 @@ export default function CaseTakingPage() {
 
               {reportLoading ? (
                 <div className={styles.reportLoadingWrap}>
-                  <div className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
-                  <p>{lang === 'hi' ? 'संपूर्ण रिपोर्ट तैयार की जा रही है...' : 'Generating complete clinical report...'}</p>
+                  <div className={styles.loadingChecklist}>
+                    <div className={styles.loadingCheckItem}>
+                      <CheckCircle2 size={18} strokeWidth={2.5} color="#166534" />
+                      <span>{lang === 'hi' ? 'बातचीत पूरी हो गई' : 'Conversation completed'}</span>
+                    </div>
+                    <div className={styles.loadingCheckItem}>
+                      <CheckCircle2 size={18} strokeWidth={2.5} color="#166534" />
+                      <span>{lang === 'hi' ? 'आपके उत्तर सहेजे गए' : 'Your answers organised'}</span>
+                    </div>
+                    <div className={`${styles.loadingCheckItem} ${styles.loadingCheckActive}`}>
+                      <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2, flexShrink: 0 }} />
+                      <span>{lang === 'hi' ? 'डॉक्टर सारांश तैयार हो रहा है…' : 'Preparing doctor summary…'}</span>
+                    </div>
+                  </div>
+                  <p className={styles.loadingHint}>{lang === 'hi' ? 'इसमें एक पल लग सकता है।' : 'This may take a moment.'}</p>
                 </div>
               ) : generatedReport ? (
                 <div className={styles.reportBody}>
                   {/* Scaled Severity Row */}
                   <div className={styles.reportSeverityRow}>
                     <span className={styles.reportSectionLabel} style={{ marginBottom: 0 }}>
-                      {lang === 'hi' ? 'आकलित गंभीरता (Severity):' : 'Scaled Severity:'}
+                      {lang === 'hi' ? 'तकलीफ की तीव्रता:' : 'Severity Level:'}
                     </span>
                     <span className={`${styles.severityBadgeLive} ${styles[`sev_${severityLevel.toLowerCase()}`] || styles.sev_mild}`}>
                       <span className={styles.severityDot} />
@@ -914,7 +1053,7 @@ export default function CaseTakingPage() {
                     {((generatedReport.red_flags && generatedReport.red_flags.length > 0) || redFlags.length > 0) && (
                       <div className={styles.reportRedFlags}>
                         <div className={styles.reportRedFlagTitle}>
-                          <span>🚩</span>
+                          <AlertTriangle size={18} strokeWidth={2.2} color="#DC2626" />
                           <span>{lang === 'hi' ? 'चेतावनी संकेत (Red Flags)' : 'Warning Signs (Red Flags)'}</span>
                         </div>
                         {(generatedReport.red_flags || redFlags.map(f => f.description)).map((rf: string, idx: number) => (
@@ -926,57 +1065,43 @@ export default function CaseTakingPage() {
                       </div>
                     )}
 
-                    {/* Recommendations for triage / doctor */}
-                    {generatedReport.recommended_actions && Array.isArray(generatedReport.recommended_actions) && generatedReport.recommended_actions.length > 0 && (
-                      <div className={styles.reportSection}>
-                        <span className={styles.reportSectionLabel}>
-                          {lang === 'hi' ? 'चिकित्सक अनुशंसा (Doctor Actions)' : 'Clinical Recommendations'}:
-                        </span>
-                        <div className={styles.recommendationsList}>
-                          {generatedReport.recommended_actions.map((rec: string, idx: number) => (
-                            <div key={idx} className={styles.recommendationItem}>
-                              <span>✓</span>
-                              <span>{rec}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Actions inside report card */}
-                  <div className={styles.reportActionGrid}>
-                    <button
-                      id="case-view-full-summary-btn"
-                      className="btn btn-primary btn-lg"
-                      onClick={() => {
-                        saveSession({
-                          ...session,
-                          clinicalState,
-                          messages: messagesRef.current,
-                          redFlags,
-                          summary: JSON.stringify(generatedReport),
-                        });
-                        router.push('/summary');
-                      }}
-                    >
-                      {lang === 'hi' ? 'पूरा सारांश पृष्ठ देखें' : 'View Full Summary Page'}
-                    </button>
-                    <button
-                      id="case-upload-docs-btn"
-                      className="btn btn-outline btn-lg"
-                      onClick={handleContinue}
-                    >
-                      {lang === 'hi' ? 'दस्तावेज़ अपलोड करें' : 'Upload Documents'}
-                    </button>
+                  {/* AI Disclaimer — Physician Review Notice */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: 12, color: '#166534', marginTop: 4 }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                      <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                    <span>{lang === 'hi' ? 'AI-सहायक इतिहास सारांश — चिकित्सक समीक्षा आवश्यक' : 'AI-assisted history summary — physician review required.'}</span>
                   </div>
                 </div>
               ) : null}
             </div>
           )}
 
-          {/* MCQ tap options */}
-          {!isComplete && currentQuestion && currentQuestion.options?.length > 0 && (
+          {/* Chief Complaint Quick Tap Symptoms */}
+          {!isComplete && isChiefComplaintPhase && (
+            <div className={styles.quickSymptomSection}>
+              <p className={styles.quickSymptomTitle}>{t(lang, 'chief_quick_tap')}</p>
+              <div className={styles.quickSymptomGrid}>
+                {quickSymptoms.map((s, idx) => (
+                  <button
+                    key={idx}
+                    className={styles.quickSymptomCard}
+                    onClick={() => handleOptionTap(s.label)}
+                    disabled={inputMode === 'processing'}
+                  >
+                    <span className={styles.quickSymptomIcon}>{s.icon}</span>
+                    <span className={styles.quickSymptomLabel}>{s.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* MCQ tap options for adaptive questions */}
+          {!isComplete && !isChiefComplaintPhase && currentQuestion && currentQuestion.options?.length > 0 && (
             <div className={styles.mcqGrid}>
               {currentQuestion.options.map(opt => (
                 <button
@@ -991,29 +1116,12 @@ export default function CaseTakingPage() {
             </div>
           )}
 
-          {/* Mic button */}
+          {/* Secondary "type instead" fallback */}
           {!isComplete && (
-            <div className={styles.micColumn}>
-              <button
-                id="case-mic-btn"
-                className={`${styles.micBtnLarge} ${inputMode === 'listening' ? styles.micBtnActive : ''}`}
-                onClick={handleMicTap}
-                disabled={inputMode === 'processing'}
-                aria-label={inputMode === 'listening' ? 'Stop recording' : 'Start voice input'}
-              >
-                {inputMode === 'listening' && <div className={styles.rippleLarge} />}
-                {inputMode === 'listening' ? (
-                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" rx="2" fill="white" /></svg>
-                ) : (
-                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="white" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                )}
-              </button>
-
+            <div className={styles.typeSection}>
               <button className={styles.typeInsteadBtn} onClick={() => setShowTypeInput(v => !v)}>
-                ⌨ {t(lang, 'case_type_instead')}
+                <Keyboard size={16} strokeWidth={2} />
+                <span>{t(lang, 'case_type_instead')}</span>
               </button>
 
               {showTypeInput && (
@@ -1039,16 +1147,21 @@ export default function CaseTakingPage() {
 
         {isComplete && (
           <div className={styles.completeBar}>
-            <div className={styles.completeMsg}>
-              <span>✅</span>
-              <span>{lang === 'hi' ? 'इतिहास दर्ज हुआ' : 'History Recorded'}</span>
+            <div className={styles.completeBarInner}>
+              <div className={styles.completeMsg}>
+                <CheckCircle2 size={24} strokeWidth={2.5} color="#166534" style={{ flexShrink: 0 }} />
+                <div>
+                  <div>{lang === 'hi' ? 'आपके उत्तर दर्ज हो गए हैं।' : 'Your answers have been recorded.'}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {lang === 'hi' ? 'आप अपनी पुरानी दवाएं या रिपोर्ट जोड़ सकते हैं।' : 'You can now add previous prescriptions or reports.'}
+                  </div>
+                </div>
+              </div>
+              <button id="case-continue-btn" className="btn btn-primary btn-lg" onClick={handleContinue}>
+                <span>{lang === 'hi' ? 'दस्तावेज़ अपलोड करें' : 'Upload Documents'}</span>
+                <ArrowRight size={20} strokeWidth={2.2} />
+              </button>
             </div>
-            <button id="case-continue-btn" className="btn btn-primary btn-lg" onClick={handleContinue}>
-              {lang === 'hi' ? 'दस्तावेज़ अपलोड करें (आगे बढ़ें)' : 'Upload Documents (Continue)'}
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
           </div>
         )}
       </main>

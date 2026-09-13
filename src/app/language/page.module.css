@@ -4,7 +4,7 @@
   box-shadow: var(--shadow-xl);
   padding: 48px 40px;
   width: 100%;
-  max-width: 520px;
+  max-width: 540px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -12,14 +12,14 @@
 }
 
 .iconWrap {
-  width: 72px;
-  height: 72px;
-  background: var(--green-100);
-  border-radius: var(--radius-lg);
+  width: 68px;
+  height: 68px;
+  background: #E8F5E9;
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--green-600);
+  color: #1E5B2B;
 }
 
 .title {
@@ -27,6 +27,7 @@
   font-weight: 800;
   color: var(--text-primary);
   text-align: center;
+  margin: 0;
 }
 
 .subtitle {
@@ -49,42 +50,54 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 28px 16px;
-  border: 2px solid var(--border);
+  gap: 10px;
+  padding: 26px 16px;
+  border: 2px solid #E5E7EB;
   border-radius: var(--radius-lg);
   background: var(--white);
   cursor: pointer;
   transition: all var(--transition-normal);
-  min-height: 140px;
+  min-height: 150px;
 }
+
 .langCard:hover {
-  border-color: var(--green-400);
-  background: var(--green-50);
+  border-color: #86EFAC;
+  background: #F0FDF4;
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 
 .langCardActive {
-  border-color: var(--green-500);
-  background: linear-gradient(135deg, var(--green-50), #d8f0da);
-  box-shadow: 0 0 0 3px rgba(45,122,58,0.15), var(--shadow-md);
+  border-color: #2D7A3A;
+  background: linear-gradient(135deg, #F0FDF4, #DCFCE7);
+  box-shadow: 0 0 0 3px rgba(45, 122, 58, 0.18), var(--shadow-md);
 }
 
-.langFlag {
-  font-size: 40px;
-  line-height: 1;
+.langIconBadge {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  background: #F3F4F6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.langCardActive .langIconBadge {
+  background: #D1FAE5;
 }
 
 .langName {
-  font-size: var(--font-size-xl);
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
   color: var(--text-primary);
 }
 
 .langNote {
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
+  font-size: 14px;
+  color: #4B5563;
+  font-weight: 500;
 }
 
 .checkmark {
@@ -93,10 +106,15 @@
   right: 10px;
   width: 28px;
   height: 28px;
-  background: var(--green-500);
+  background: #2D7A3A;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   animation: scaleIn 0.2s ease;
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }

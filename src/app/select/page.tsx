@@ -1,17 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AccessibilityBar from '@/components/AccessibilityBar';
-import { loadSession, saveSession, defaultClinicalState } from '@/lib/store';
+import { loadSession, saveSession, defaultSession, defaultClinicalState, AppSession } from '@/lib/store';
 import { t } from '@/lib/translations';
+import { Stethoscope, Sparkles, Mic, Touchpad, AlertTriangle, FileText, ArrowRight, X } from 'lucide-react';
 import styles from './page.module.css';
 
 export default function SelectPage() {
   const router = useRouter();
-  const [session, setSession] = useState(loadSession());
-  const lang = session.language;
+  const [mounted, setMounted] = useState(false);
+  const [session, setSession] = useState<AppSession>(defaultSession);
   const [ayushModal, setAyushModal] = useState(false);
+
+  useEffect(() => {
+    setSession(loadSession());
+    setMounted(true);
+  }, []);
+
+  const lang = session.language;
 
   const updateSession = (updates: Partial<typeof session>) => {
     const updated = { ...session, ...updates };
@@ -29,6 +37,40 @@ export default function SelectPage() {
     });
     router.push('/case-taking');
   };
+
+  if (!mounted) {
+    return (
+      <div className="page-container" style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="spinner" style={{ width: 44, height: 44 }} />
+      </div>
+    );
+  }
+
+  const generalFeatures = [
+    {
+      icon: <Mic size={16} strokeWidth={2} />,
+      label: lang === 'hi' ? 'आवाज़ से बातचीत (Voice interaction)' : 'Voice interaction',
+    },
+    {
+      icon: <Touchpad size={16} strokeWidth={2} />,
+      label: lang === 'hi' ? 'टच से उत्तर दें (Tap to answer)' : 'Tap to answer',
+    },
+    {
+      icon: <AlertTriangle size={16} strokeWidth={2} />,
+      label: lang === 'hi' ? 'रेड-फ्लैग पहचान (Red-flag detection)' : 'Red-flag detection',
+    },
+    {
+      icon: <FileText size={16} strokeWidth={2} />,
+      label: lang === 'hi' ? 'दस्तावेज़ स्कैनिंग (Document scanning)' : 'Document scanning',
+    },
+  ];
+
+  const ayushFeatures = [
+    lang === 'hi' ? 'दशविध परीक्षा' : 'Dashavidha Pariksha',
+    lang === 'hi' ? 'प्रकृति / विकृति' : 'Prakriti / Vikriti',
+    lang === 'hi' ? 'आयुष प्रश्नावली' : 'AYUSH Questionnaire',
+    lang === 'hi' ? 'आयुष क्लिनिकल सारांश' : 'AYUSH Clinical Summary',
+  ];
 
   return (
     <div className="page-container">
@@ -56,53 +98,49 @@ export default function SelectPage() {
         )}
 
         <div className={`${styles.header} animate-fade-in delay-100`}>
-          <h1 className="section-title">{t(lang, 'consult_title')}</h1>
+          <h1 className="section-title" data-read-aloud="true">{t(lang, 'consult_title')}</h1>
           <p className="section-subtitle">{t(lang, 'consult_subtitle')}</p>
         </div>
 
         <div className={styles.grid}>
-          {/* GENERAL MEDICAL */}
+          {/* GENERAL MEDICAL — PRIMARY ACTIVE */}
           <div
             className={`${styles.consultCard} ${styles.activeCard} animate-fade-in-up delay-200`}
             id="select-general-card"
+            onClick={handleGeneral}
           >
             <div className={styles.cardIcon} style={{ background: 'linear-gradient(135deg, #E8F5E9, #C8E6C9)' }}>
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
-                <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" stroke="#2D7A3A" strokeWidth="1.5"/>
-                <path d="M12 8v8M8 12h8" stroke="#2D7A3A" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
+              <Stethoscope size={36} color="#1E5B2B" strokeWidth={2.2} />
             </div>
             <div className={styles.cardBadge}>
               <span className="badge badge-success">
-                {lang === 'hi' ? 'उपलब्ध' : 'Available'}
+                {lang === 'hi' ? 'सक्रिय (Available)' : 'Active Consultation'}
               </span>
             </div>
             <h2 className={styles.cardTitle}>{t(lang, 'consult_general_title')}</h2>
             <p className={styles.cardDesc}>{t(lang, 'consult_general_desc')}</p>
 
             <div className={styles.cardFeatures}>
-              {(lang === 'hi'
-                ? ['🎤 आवाज़ से बात करें', '👆 विकल्प टैप करें', '🚩 रेड-फ्लैग डिटेक्शन', '📄 OCR दस्तावेज़ पढ़ना']
-                : ['🎤 Voice interaction', '👆 Tap to answer', '🚩 Red-flag detection', '📄 OCR document reading']
-              ).map(f => (
-                <div key={f} className={styles.feature}>{f}</div>
+              {generalFeatures.map((f, idx) => (
+                <div key={idx} className={styles.feature}>
+                  <span className={styles.featureIconWrap}>{f.icon}</span>
+                  <span>{f.label}</span>
+                </div>
               ))}
             </div>
 
             <button
               id="select-general-btn"
-              className="btn btn-primary btn-lg"
+              className="btn btn-primary btn-xl"
               style={{ width: '100%', marginTop: 8 }}
-              onClick={handleGeneral}
+              onClick={(e) => { e.stopPropagation(); handleGeneral(); }}
             >
-              {t(lang, 'consult_general_btn')}
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <span>{t(lang, 'consult_general_btn')}</span>
+              <ArrowRight size={22} strokeWidth={2.4} />
             </button>
           </div>
 
-          {/* AYUSH */}
+          {/* AYUSH — DISTINCT COMING SOON */}
           <div
             className={`${styles.consultCard} ${styles.comingSoonCard} animate-fade-in-up delay-300`}
             id="select-ayush-card"
@@ -111,12 +149,8 @@ export default function SelectPage() {
             tabIndex={0}
             onKeyDown={e => e.key === 'Enter' && setAyushModal(true)}
           >
-            <div className={styles.cardIcon} style={{ background: 'linear-gradient(135deg, #FFF8E1, #FFF3CD)' }}>
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z" stroke="#F59E0B" strokeWidth="1.5"/>
-                <path d="M12 6c-1 2-4 3-4 6s3 4 4 6c1-2 4-3 4-6s-3-4-4-6z" stroke="#F59E0B" strokeWidth="1.5"/>
-                <path d="M6 12h12" stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
+            <div className={styles.cardIcon} style={{ background: 'linear-gradient(135deg, #FEF3C7, #FDE68A)' }}>
+              <Sparkles size={36} color="#D97706" strokeWidth={2} />
             </div>
             <div className={styles.cardBadge}>
               <span className="coming-soon-badge">
@@ -131,20 +165,20 @@ export default function SelectPage() {
             </p>
 
             <div className={styles.cardFeatures}>
-              {(lang === 'hi'
-                ? ['🌿 दशविध परीक्षा', '🔬 प्रकृति / विकृति', '📋 आयुष प्रश्नावली', '👨‍⚕️ आयुष सारांश']
-                : ['🌿 Dashavidha Pariksha', '🔬 Prakriti / Vikriti', '📋 AYUSH Questionnaire', '👨‍⚕️ AYUSH Summary']
-              ).map(f => (
-                <div key={f} className={`${styles.feature} ${styles.featureDim}`}>{f}</div>
+              {ayushFeatures.map(f => (
+                <div key={f} className={`${styles.feature} ${styles.featureDim}`}>
+                  <span>{f}</span>
+                </div>
               ))}
             </div>
 
             <button
+              type="button"
               className="btn btn-secondary btn-lg"
-              style={{ width: '100%', marginTop: 8, opacity: 0.6, cursor: 'not-allowed' }}
-              disabled
+              style={{ width: '100%', marginTop: 8, opacity: 0.7, cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); setAyushModal(true); }}
             >
-              {t(lang, 'consult_ayush_coming_soon')}
+              {lang === 'hi' ? 'विवरण देखें (जल्द आ रहा है)' : 'Details (Coming Soon)'}
             </button>
           </div>
         </div>
@@ -154,7 +188,11 @@ export default function SelectPage() {
       {ayushModal && (
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-box" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>🌿</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+              <div style={{ padding: 16, background: '#FEF3C7', borderRadius: '50%', color: '#D97706' }}>
+                <Sparkles size={44} strokeWidth={2} />
+              </div>
+            </div>
             <h2 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12 }}>
               {t(lang, 'consult_ayush_modal_title')}
             </h2>
@@ -167,7 +205,8 @@ export default function SelectPage() {
               style={{ width: '100%' }}
               onClick={() => setAyushModal(false)}
             >
-              {t(lang, 'consult_ayush_modal_close')}
+              <X size={18} />
+              <span>{t(lang, 'consult_ayush_modal_close')}</span>
             </button>
           </div>
         </div>

@@ -21,8 +21,19 @@ export async function POST(req: NextRequest) {
     // Map lang to Sarvam language code
     const languageCode = lang === 'hi' ? 'hi-IN' : 'en-IN';
 
+    // Determine appropriate filename & extension based on incoming MIME type
+    const mimeType = audioFile.type || '';
+    let filename = 'recording.webm';
+    if (mimeType.includes('mp4') || mimeType.includes('m4a')) {
+      filename = 'recording.mp4';
+    } else if (mimeType.includes('wav')) {
+      filename = 'recording.wav';
+    } else if (mimeType.includes('ogg') || mimeType.includes('opus')) {
+      filename = 'recording.ogg';
+    }
+
     const sarvamFormData = new FormData();
-    sarvamFormData.append('file', audioFile, 'recording.webm');
+    sarvamFormData.append('file', audioFile, filename);
     sarvamFormData.append('model', 'saarika:v2.5');
     sarvamFormData.append('language_code', languageCode);
     sarvamFormData.append('with_timestamps', 'false');
@@ -38,8 +49,8 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const err = await response.text();
-      console.error('Sarvam STT error:', err);
-      return NextResponse.json({ error: 'STT failed' }, { status: 500 });
+      console.error('Sarvam STT error:', response.status, err);
+      return NextResponse.json({ error: 'STT failed', details: err }, { status: response.status });
     }
 
     const data = await response.json();

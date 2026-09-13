@@ -1,24 +1,56 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AccessibilityBar from '@/components/AccessibilityBar';
-import { loadSession, saveSession, ExtractedDocument } from '@/lib/store';
+import { loadSession, saveSession, defaultSession, AppSession, ExtractedDocument } from '@/lib/store';
 import { t } from '@/lib/translations';
+import { FileUp, Camera, CheckCircle2, AlertCircle, ArrowRight, Plus } from 'lucide-react';
 import styles from './page.module.css';
 
 export default function UploadPage() {
   const router = useRouter();
-  const [session, setSession] = useState(loadSession());
-  const lang = session.language;
-
+  const [mounted, setMounted] = useState(false);
+  const [session, setSession] = useState<AppSession>(defaultSession);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'processing' | 'done' | 'error'>('idle');
   const [extracted, setExtracted] = useState<ExtractedDocument | null>(null);
-  const [documents, setDocuments] = useState<ExtractedDocument[]>(session.documents || []);
+  const [documents, setDocuments] = useState<ExtractedDocument[]>([]);
+  const [processingStep, setProcessingStep] = useState(0);
+
+  const ocrSteps = {
+    hi: [
+      'दस्तावेज़ पढ़ा जा रहा है…',
+      'दवाएं और रिपोर्ट विवरण खोजे जा रहे हैं…',
+      'जानकारी सत्यापित की जा रही है…',
+    ],
+    en: [
+      'Reading your document…',
+      'Finding medicines and report details…',
+      'Checking extracted information…',
+    ],
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const s = loadSession();
+    setSession(s);
+    setDocuments(s.documents || []);
+    setMounted(true);
+  }, []);
+
+  // Cycle through OCR progress messages while processing
+  useEffect(() => {
+    if (status !== 'processing') { setProcessingStep(0); return; }
+    const timer = setInterval(() => {
+      setProcessingStep(prev => Math.min(prev + 1, 2));
+    }, 1800);
+    return () => clearInterval(timer);
+  }, [status]);
+
+  const lang = session.language;
 
   const updateSession = (updates: Partial<typeof session>) => {
     const updated = { ...session, ...updates };
@@ -73,6 +105,14 @@ export default function UploadPage() {
     router.push('/summary');
   };
 
+  if (!mounted) {
+    return (
+      <div className="page-container" style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="spinner" style={{ width: 44, height: 44 }} />
+      </div>
+    );
+  }
+
   return (
     <div className="page-container">
       <AccessibilityBar
@@ -87,19 +127,15 @@ export default function UploadPage() {
           {/* Header */}
           <div className={styles.header}>
             <div className={styles.iconWrap}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                <polyline points="17 8 12 3 7 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
+              <FileUp size={32} strokeWidth={2.2} color="#1E5B2B" />
             </div>
             <div>
-              <h1 className="section-title">{t(lang, 'upload_title')}</h1>
+              <h1 className="section-title" data-read-aloud="true">{t(lang, 'upload_title')}</h1>
               <p className="section-subtitle">{t(lang, 'upload_subtitle')}</p>
             </div>
           </div>
 
-          {/* Upload zone */}
+          {/* Upload Dropzone */}
           <div
             className={`${styles.dropzone} ${file ? styles.dropzoneHasFile : ''}`}
             onClick={() => fileInputRef.current?.click()}
@@ -122,10 +158,20 @@ export default function UploadPage() {
               </div>
             ) : (
               <div className={styles.dropContent}>
-                <div className={styles.dropIcon}>📄</div>
+                <div className={styles.dropIconPair}>
+                  <div className={styles.dropIconCircle}>
+                    <FileUp size={32} strokeWidth={2} color="#1E5B2B" />
+                  </div>
+                  <div className={styles.dropIconCircle}>
+                    <Camera size={32} strokeWidth={2} color="#1E5B2B" />
+                  </div>
+                </div>
                 <p className={styles.dropText}>{t(lang, 'upload_btn')}</p>
                 <p className={styles.dropHint}>
-                  {lang === 'hi' ? 'या यहाँ खींचें और छोड़ें' : 'or drag & drop here'}
+                  {lang === 'hi' ? 'दस्तावेज़ की फ़ोटो चुनें या कैमरा से लें' : 'Choose document photo or capture with camera'}
+                </p>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {lang === 'hi' ? 'सुनिश्चित करें कि लिखावट साफ़ दिखाई दे रही हो' : 'Make sure the writing is clearly visible'}
                 </p>
                 <p className={styles.dropFormats}>JPG, PNG, PDF</p>
               </div>
@@ -136,14 +182,14 @@ export default function UploadPage() {
           {file && status !== 'done' && (
             <button
               id="upload-process-btn"
-              className={`btn btn-primary btn-lg ${styles.processBtn}`}
+              className={`btn btn-primary btn-xl ${styles.processBtn}`}
               onClick={handleProcess}
               disabled={status === 'processing'}
             >
               {status === 'processing' ? (
-                <><div className="spinner" />{t(lang, 'upload_processing')}</>
+                <><div className="spinner" /><span>{lang === 'hi' ? ocrSteps.hi[processingStep] : ocrSteps.en[processingStep]}</span></>
               ) : (
-                <>{lang === 'hi' ? 'दस्तावेज़ पढ़ें' : 'Read Document'}</>
+                <>{lang === 'hi' ? 'दस्तावेज़ स्कैन करें' : 'Scan Document'}</>
               )}
             </button>
           )}
@@ -152,17 +198,26 @@ export default function UploadPage() {
           {extracted && status === 'done' && (
             <div className={`${styles.result} animate-fade-in-up`}>
               <div className={styles.resultHeader}>
-                <span className="badge badge-success">
-                  {extracted.confidence === 'HIGH' ? '✅ ' : '⚠️ '}
-                  {extracted.confidence === 'NEEDS_VERIFICATION'
-                    ? t(lang, 'upload_verify')
-                    : t(lang, 'upload_success')}
+                <span
+                  className={`badge ${extracted.confidence === 'HIGH' ? 'badge-success' : 'badge-warning'}`}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  {extracted.confidence === 'HIGH' ? (
+                    <CheckCircle2 size={16} strokeWidth={2.4} />
+                  ) : (
+                    <AlertCircle size={16} strokeWidth={2.4} />
+                  )}
+                  <span>
+                    {extracted.confidence === 'NEEDS_VERIFICATION'
+                      ? (lang === 'hi' ? 'सत्यापन आवश्यक' : 'Needs Verification')
+                      : (lang === 'hi' ? 'स्पष्ट पढ़ा गया' : "We've read your document")}
+                  </span>
                 </span>
               </div>
 
               {extracted.diagnosis && extracted.diagnosis.length > 0 && (
                 <div className={styles.resultSection}>
-                  <h3>{lang === 'hi' ? 'निदान' : 'Diagnosis'}</h3>
+                  <h3>{lang === 'hi' ? 'उल्लिखित स्थितियां' : 'Mentioned Conditions'}</h3>
                   <div className={styles.pills}>
                     {extracted.diagnosis.map(d => <span key={d} className="badge badge-info">{d}</span>)}
                   </div>
@@ -203,8 +258,14 @@ export default function UploadPage() {
 
           {/* Navigation */}
           <div className={styles.navRow}>
-            <button id="upload-skip-btn" className="btn btn-ghost" onClick={handleSkip}>
-              {documents.length > 0 ? (lang === 'hi' ? 'छोड़ें' : 'Skip further uploads') : t(lang, 'upload_skip')}
+            <button
+              id="upload-skip-btn"
+              className={styles.bypassBtn}
+              onClick={handleSkip}
+            >
+              {documents.length > 0
+                ? (lang === 'hi' ? 'आगे बढ़ें (Proceed)' : 'Skip further uploads')
+                : (lang === 'hi' ? 'मेरे पास दस्तावेज़ नहीं हैं (आगे बढ़ें)' : 'I don\'t have documents (Proceed)')}
             </button>
 
             <div style={{ display: 'flex', gap: '12px' }}>
@@ -219,16 +280,15 @@ export default function UploadPage() {
                     setExtracted(null);
                   }}
                 >
-                  {lang === 'hi' ? 'एक और अपलोड करें' : 'Upload Another'}
+                  <Plus size={18} strokeWidth={2} />
+                  <span>{lang === 'hi' ? 'एक और अपलोड करें' : 'Upload Another'}</span>
                 </button>
               )}
 
-              {(status === 'done' || (!file && documents.length > 0) || (!file && documents.length === 0)) && (
-                <button id="upload-continue-btn" className="btn btn-primary btn-lg" onClick={handleContinue}>
-                  {lang === 'hi' ? 'सारांश देखें' : 'View Summary'}
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+              {(status === 'done' || (!file && documents.length > 0)) && (
+                <button id="upload-continue-btn" className="btn btn-primary btn-xl" onClick={handleContinue}>
+                  <span>{lang === 'hi' ? 'सारांश देखें' : 'View Summary'}</span>
+                  <ArrowRight size={22} strokeWidth={2.4} />
                 </button>
               )}
             </div>

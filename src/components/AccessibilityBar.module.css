@@ -78,6 +78,26 @@
   border-right: 1px solid var(--border);
 }
 
+.readAloudBtn {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--green-600);
+  font-weight: 700;
+  gap: 6px;
+  padding: 8px 14px;
+}
+.readAloudBtn:hover {
+  background: var(--green-50);
+  border-color: var(--green-400);
+}
+.readAloudActive {
+  background: var(--green-100);
+  color: var(--green-700);
+  border-color: var(--green-500);
+  animation: pulse 1.5s infinite;
+}
+
 .langBtn {
   border: 1px solid var(--border);
   border-radius: 10px;

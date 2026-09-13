@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AccessibilityBar from '@/components/AccessibilityBar';
 import { Language } from '@/lib/translations';
 import { loadSession, saveSession } from '@/lib/store';
+import { Languages, Globe, Check, ArrowRight } from 'lucide-react';
 import styles from './page.module.css';
 
 export default function LanguagePage() {
@@ -40,55 +41,55 @@ export default function LanguagePage() {
 
       <main className="page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100dvh - 60px)' }}>
         <div className={`${styles.card} animate-fade-in-up`}>
-          {/* Top icon */}
+          {/* Top Icon */}
           <div className={styles.iconWrap}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-              <path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z" fill="currentColor"/>
-            </svg>
+            <Languages size={36} strokeWidth={2.2} />
           </div>
 
-          <h1 className={styles.title}>
-            {selected === 'hi' ? 'भाषा चुनें' : 'Select Language'}
+          <h1 className={styles.title} data-read-aloud="true">
+            {selected === 'hi' ? 'नमस्ते! अपनी भाषा चुनें' : 'Welcome! Select Language'}
           </h1>
           <p className={styles.subtitle}>
-            {selected === 'hi' ? 'कृपया अपनी पसंदीदा भाषा चुनें' : 'Please choose your preferred language'}
+            {selected === 'hi' ? 'बातचीत के लिए अपनी पसंदीदा भाषा चुनें' : 'Choose your preferred language for consultation'}
           </p>
 
           <div className={styles.langGrid}>
-            {/* Hindi */}
+            {/* Hindi Option */}
             <button
               id="lang-hindi-btn"
+              type="button"
               className={`${styles.langCard} ${selected === 'hi' ? styles.langCardActive : ''}`}
               onClick={() => updateLang('hi')}
               aria-pressed={selected === 'hi'}
             >
-              <div className={styles.langFlag}>IN</div>
+              <div className={styles.langIconBadge}>
+                <Languages size={32} strokeWidth={2} color={selected === 'hi' ? '#1E5B2B' : '#4B5563'} />
+              </div>
               <div className={styles.langName}>हिंदी</div>
-              <div className={styles.langNote}>Hindi</div>
+              <div className={styles.langNote}>हिंदी में आगे बढ़ें</div>
               {selected === 'hi' && (
                 <div className={styles.checkmark}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path d="M20 6L9 17l-5-5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+                  <Check size={18} strokeWidth={3} color="#FFFFFF" />
                 </div>
               )}
             </button>
 
-            {/* English */}
+            {/* English Option */}
             <button
               id="lang-english-btn"
+              type="button"
               className={`${styles.langCard} ${selected === 'en' ? styles.langCardActive : ''}`}
               onClick={() => updateLang('en')}
               aria-pressed={selected === 'en'}
             >
-              <div className={styles.langFlag}>EN</div>
+              <div className={styles.langIconBadge}>
+                <Globe size={32} strokeWidth={2} color={selected === 'en' ? '#1E5B2B' : '#4B5563'} />
+              </div>
               <div className={styles.langName}>English</div>
-              <div className={styles.langNote}>अंग्रेज़ी</div>
+              <div className={styles.langNote}>Continue in English</div>
               {selected === 'en' && (
                 <div className={styles.checkmark}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path d="M20 6L9 17l-5-5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+                  <Check size={18} strokeWidth={3} color="#FFFFFF" />
                 </div>
               )}
             </button>
@@ -96,14 +97,12 @@ export default function LanguagePage() {
 
           <button
             id="lang-continue-btn"
-            className="btn btn-primary btn-lg"
-            style={{ width: '100%' }}
+            className="btn btn-primary btn-xl"
+            style={{ width: '100%', marginTop: 8 }}
             onClick={handleContinue}
           >
-            {selected === 'hi' ? 'आगे बढ़ें' : 'Continue'}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            <span>{selected === 'hi' ? 'आगे बढ़ें (Continue)' : 'Continue (आगे बढ़ें)'}</span>
+            <ArrowRight size={22} strokeWidth={2.4} />
           </button>
         </div>
       </main>

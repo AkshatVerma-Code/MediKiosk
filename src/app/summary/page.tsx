@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AccessibilityBar from '@/components/AccessibilityBar';
 import RedFlagAlert from '@/components/RedFlagAlert';
-import { loadSession, saveSession } from '@/lib/store';
+import { loadSession, saveSession, defaultSession, AppSession } from '@/lib/store';
+import { CheckCircle2, Hospital, RotateCcw } from 'lucide-react';
 import styles from './page.module.css';
 
 interface AISummary {
@@ -132,13 +133,19 @@ function sanitizeSummary(raw: Record<string, unknown>): AISummary {
 
 export default function SummaryPage() {
   const router = useRouter();
-  const [session, setSession] = useState(loadSession());
-  const lang = session.language;
+  const [mounted, setMounted] = useState(false);
+  const [session, setSession] = useState<AppSession>(defaultSession);
 
   const [summary, setSummary] = useState<AISummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [persisted, setPersisted] = useState(false);
+
+  const lang = session.language;
+
+  const tokenNumber = session.patient
+    ? `TK-${Math.abs(session.patient.name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 100) % 900 + 100)}`
+    : 'TK-101';
 
   const updateSession = (updates: Partial<typeof session>) => {
     const updated = { ...session, ...updates };
@@ -147,22 +154,27 @@ export default function SummaryPage() {
   };
 
   useEffect(() => {
-    if (session.summary) {
+    const s = loadSession();
+    setSession(s);
+    setMounted(true);
+
+    if (s.summary) {
       try {
-        const parsed = JSON.parse(session.summary);
+        const parsed = JSON.parse(s.summary);
         // Sanitize to ensure no raw objects slip through to React rendering
         setSummary(sanitizeSummary(parsed as Record<string, unknown>));
         setLoading(false);
-        if (session.documents && session.documents.length > 0) {
-          generateSummary();
+        if (s.documents && s.documents.length > 0) {
+          generateSummary(s);
         }
         return;
       } catch {}
     }
-    generateSummary();
+    generateSummary(s);
   }, []); // eslint-disable-line
 
-  const generateSummary = async () => {
+  const generateSummary = async (sess?: AppSession) => {
+    const active = sess || session;
     setLoading(true);
     setError(false);
     try {
@@ -170,10 +182,10 @@ export default function SummaryPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          clinical_state: session.clinicalState,
-          red_flags: session.redFlags,
-          documents: session.documents,
-          lang,
+          clinical_state: active.clinicalState,
+          red_flags: active.redFlags,
+          documents: active.documents,
+          lang: active.language,
         }),
       });
 
@@ -237,11 +249,13 @@ export default function SummaryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summary]);
 
-  const priorityColor: Record<string, string> = {
-    URGENT: '#DC2626',
-    HIGH: '#D97706',
-    ROUTINE: '#2D7A3A',
-  };
+  if (!mounted) {
+    return (
+      <div className="page-container" style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="spinner" style={{ width: 44, height: 44 }} />
+      </div>
+    );
+  }
 
   return (
     <div className="page-container">
@@ -275,160 +289,74 @@ export default function SummaryPage() {
           {loading ? (
             <div className={styles.loadingCard}>
               <div className="spinner" style={{ width: 48, height: 48, borderWidth: 4 }} />
-              <p>{lang === 'hi' ? 'सारांश तैयार हो रहा है...' : 'Generating summary...'}</p>
+              <p>{lang === 'hi' ? 'विवरण सुरक्षित किया जा रहा है...' : 'Saving your details...'}</p>
             </div>
           ) : error ? (
             <div className={styles.errorCard}>
               <p>{lang === 'hi' ? 'सारांश तैयार नहीं हो सका।' : 'Could not generate summary.'}</p>
-              <button className="btn btn-primary" onClick={generateSummary}>
+              <button className="btn btn-primary" onClick={() => generateSummary()}>
                 {lang === 'hi' ? 'दोबारा कोशिश करें' : 'Try Again'}
               </button>
             </div>
           ) : summary ? (
-            <div className={styles.summaryCard}>
-              {/* Priority badge */}
-              {summary.priority && (
-                <div className={styles.priorityBadge} style={{ background: `${priorityColor[summary.priority]}20`, color: priorityColor[summary.priority], borderColor: `${priorityColor[summary.priority]}40` }}>
-                  🔴 {summary.priority === 'URGENT' ? (lang === 'hi' ? 'तुरंत' : 'URGENT') : summary.priority}
+            <>
+              {/* Patient Friendly Confirmation Hero Card */}
+              <div className={styles.patientSuccessCard}>
+                <div className={styles.successIconWrap}>
+                  <CheckCircle2 size={42} strokeWidth={2.4} color="#FFFFFF" />
                 </div>
-              )}
 
-              {/* Summary text */}
-              {summary.summary_text && (
-                <div className={styles.summaryText}>
-                  <p>{summary.summary_text}</p>
+                <h2 className={styles.successTitle} data-read-aloud="true">
+                  {lang === 'hi'
+                    ? 'आपका स्वास्थ्य इतिहास तैयार है'
+                    : 'Your health history is ready'}
+                </h2>
+
+                <p className={styles.successSub}>
+                  {lang === 'hi'
+                    ? 'आपकी जानकारी डॉक्टर के लिए तैयार कर ली गई है।'
+                    : 'Your information has been prepared for the doctor.'}
+                </p>
+
+                {/* Token Box */}
+                <div className={styles.tokenCard}>
+                  <span className={styles.tokenLabel}>{lang === 'hi' ? 'आपका टोकन' : 'Your Token'}</span>
+                  <span className={styles.tokenNum}>{tokenNumber}</span>
                 </div>
-              )}
 
-              <div className={styles.grid}>
-                {/* Chief complaint */}
-                {summary.chief_complaint && (
-                  <div className={styles.section}>
-                    <h3 className={styles.sectionLabel}>{lang === 'hi' ? 'मुख्य शिकायत' : 'Chief Complaint'}</h3>
-                    <p className={styles.sectionValue}>{summary.chief_complaint}</p>
+                {/* Next Step Instructions */}
+                <div className={styles.instructionsCard}>
+                  <div className={styles.instructionIconWrap}>
+                    <Hospital size={28} strokeWidth={2.2} color="#1E5B2B" />
                   </div>
-                )}
+                  <p className={styles.instructionText}>
+                    {lang === 'hi'
+                      ? 'कृपया प्रतीक्षा क्षेत्र में बैठें। टोकन नंबर बुलाए जाने पर डॉक्टर कक्ष में जाएं।'
+                      : 'Please take a seat in the waiting area. Enter the doctor’s chamber when your token is announced.'}
+                  </p>
+                </div>
 
-                {/* History */}
-                {summary.history_of_present_illness && (
-                  <div className={styles.section}>
-                    <h3 className={styles.sectionLabel}>{lang === 'hi' ? 'वर्तमान बीमारी' : 'History of Present Illness'}</h3>
-                    <p className={styles.sectionValue}>{summary.history_of_present_illness}</p>
-                  </div>
-                )}
-
-                {/* Associated symptoms */}
-                {summary.associated_symptoms && summary.associated_symptoms.length > 0 && (
-                  <div className={styles.section}>
-                    <h3 className={styles.sectionLabel}>{lang === 'hi' ? 'संबद्ध लक्षण' : 'Associated Symptoms'}</h3>
-                    <div className={styles.pills}>
-                      {summary.associated_symptoms.map(s => <span key={s} className="badge badge-info">{s}</span>)}
-                    </div>
-                  </div>
-                )}
-
-                {/* Past history */}
-                {summary.past_medical_history && summary.past_medical_history.length > 0 && (
-                  <div className={styles.section}>
-                    <h3 className={styles.sectionLabel}>{lang === 'hi' ? 'पुरानी बीमारियाँ' : 'Past Medical History'}</h3>
-                    <div className={styles.pills}>
-                      {summary.past_medical_history.map(h => <span key={h} className="badge badge-gray">{h}</span>)}
-                    </div>
-                  </div>
-                )}
-
-                {/* Medications */}
-                {summary.current_medications && summary.current_medications.length > 0 && (
-                  <div className={styles.section}>
-                    <h3 className={styles.sectionLabel}>{lang === 'hi' ? 'वर्तमान दवाएं' : 'Current Medications'}</h3>
-                    {summary.current_medications.map((m, i) => (
-                      <div key={i} className={styles.medRow}>
-                        <strong>{m.name}</strong>
-                        {m.dose && <span> — {m.dose}</span>}
-                        {m.frequency && <span>, {m.frequency}</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Investigations */}
-                {summary.relevant_investigations && summary.relevant_investigations.length > 0 && (
-                  <div className={styles.section}>
-                    <h3 className={styles.sectionLabel}>{lang === 'hi' ? 'जांच परिणाम' : 'Investigations'}</h3>
-                    {summary.relevant_investigations.map((inv, i) => (
-                      <div key={i} className={styles.labRow}>
-                        <span>{inv.name}</span>
-                        {inv.value && <span> — {inv.value}</span>}
-                        {inv.status && (
-                          <span className={`badge ${inv.status !== 'NORMAL' ? 'badge-danger' : 'badge-success'}`} style={{ marginLeft: 8 }}>
-                            {inv.status}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Severity Assessment */}
-                {summary.severity_assessment && (
-                  <div className={styles.section}>
-                    <h3 className={styles.sectionLabel}>{lang === 'hi' ? 'आकलित गंभीरता' : 'Scaled Severity'}</h3>
-                    <p className={styles.sectionValue}>
-                      <span className="badge badge-warning" style={{ fontWeight: 700, marginRight: 8 }}>
-                        {summary.severity_assessment.score}/10 — {summary.severity_assessment.level}
-                      </span>
-                      {summary.severity_assessment.description}
-                    </p>
-                  </div>
-                )}
-
-                {/* Red flags */}
-                {summary.red_flags && summary.red_flags.length > 0 && (
-                  <div className={styles.section}>
-                    <h3 className={styles.sectionLabel} style={{ color: '#DC2626' }}>
-                      {lang === 'hi' ? '🚩 लाल झंडे' : '🚩 Red Flags'}
-                    </h3>
-                    {summary.red_flags.map(f => (
-                      <div key={f} className="badge badge-danger" style={{ display: 'block', marginBottom: 4 }}>{f}</div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Recommended Actions */}
-                {summary.recommended_actions && summary.recommended_actions.length > 0 && (
-                  <div className={styles.section}>
-                    <h3 className={styles.sectionLabel}>{lang === 'hi' ? 'चिकित्सक अनुशंसा' : 'Recommended Actions'}</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
-                      {summary.recommended_actions.map((act, i) => (
-                        <div key={i} className="badge badge-success" style={{ display: 'block', textAlign: 'left', padding: '6px 12px' }}>
-                          ✓ {act}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* AI disclaimer */}
+                <div className={styles.disclaimer} style={{ marginTop: 16 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  <span>
+                    {lang === 'hi'
+                      ? 'AI-सहायता प्राप्त सारांश — डॉक्टर द्वारा समीक्षा अनिवार्य है।'
+                      : 'AI-assisted history summary — physician review required.'}
+                  </span>
+                </div>
               </div>
-
-              {/* AI disclaimer */}
-              <div className={styles.disclaimer}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-                  <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-                {lang === 'hi'
-                  ? 'यह AI-जनित सारांश है। डॉक्टर द्वारा समीक्षा आवश्यक है।'
-                  : (summary.ai_disclaimer || 'This is an AI-generated summary. Doctor review required.')}
-              </div>
-            </div>
+            </>
           ) : null}
 
           {/* Actions */}
           <div className={styles.actions}>
-            <button id="summary-new-session-btn" className="btn btn-primary btn-lg" onClick={handleNewSession} disabled={loading}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M12 5v14M5 12h14" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              {lang === 'hi' ? 'नया सत्र शुरू करें' : 'Start New Session'}
+            <button id="summary-new-session-btn" className="btn btn-primary btn-xl" onClick={handleNewSession} disabled={loading}>
+              <RotateCcw size={20} strokeWidth={2.2} />
+              <span>{lang === 'hi' ? 'समाप्त करें (नया सत्र)' : 'Finish (New Session)'}</span>
             </button>
           </div>
         </div>

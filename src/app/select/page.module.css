@@ -114,7 +114,7 @@
 .feature {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 15px;
   color: var(--text-secondary);
   background: var(--green-50);
@@ -122,7 +122,14 @@
   padding: 8px 12px;
   font-weight: 500;
 }
+.featureIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1E5B2B;
+}
 .featureDim {
   background: var(--gray-100);
   color: var(--gray-400);
 }
+

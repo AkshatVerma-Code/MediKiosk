@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearSession, saveSession, defaultSession } from '@/lib/store';
 import { v4 as uuidv4 } from 'uuid';
+import { Stethoscope, ArrowRight, Languages, Mic, Touchpad, ShieldCheck } from 'lucide-react';
 import styles from './page.module.css';
 
 export default function LandingPage() {
@@ -11,13 +12,11 @@ export default function LandingPage() {
   const [isAnimated, setIsAnimated] = useState(false);
 
   useEffect(() => {
-    // Small delay for animation
     const t = setTimeout(() => setIsAnimated(true), 100);
     return () => clearTimeout(t);
   }, []);
 
   const handleStart = () => {
-    // Clear any old session and start fresh
     clearSession();
     const newSession = {
       ...defaultSession,
@@ -29,88 +28,79 @@ export default function LandingPage() {
 
   return (
     <main className={styles.landing}>
-      {/* Animated background blobs */}
       <div className={styles.blob1} />
       <div className={styles.blob2} />
       <div className={styles.blob3} />
 
       <div className={`${styles.content} ${isAnimated ? styles.visible : ''}`}>
-        {/* Logo / Icon */}
+        {/* Hospital Kiosk Brand Header */}
         <div className={styles.logoWrap}>
           <div className={styles.logoIcon}>
-            <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
-              <rect width="56" height="56" rx="16" fill="white" fillOpacity="0.2" />
-              <path d="M28 12C19.16 12 12 19.16 12 28s7.16 16 16 16 16-7.16 16-16S36.84 12 28 12zm2 24h-4v-4h4v4zm0-8h-4V20h4v8z"
-                fill="white" />
-            </svg>
+            <Stethoscope size={36} color="#FFFFFF" strokeWidth={2.2} />
           </div>
           <div className={styles.logoText}>
             <span className={styles.logoMain}>MediKiosk</span>
-            <span className={styles.logoSub}>मेडकिस्क</span>
+            <span className={styles.logoSub}>अस्पताल रोगी सहायता कियोस्क</span>
           </div>
         </div>
 
-        {/* Headline */}
-        <h1 className={styles.headline}>
-          AI-Powered Patient<br />History System
-        </h1>
-        <p className={styles.sub}>
-          AI-संचालित रोगी इतिहास प्रणाली
-        </p>
-
-        {/* Stats row */}
-        <div className={styles.statsRow}>
-          <div className={styles.stat}>
-            <span className={styles.statNum}>2x</span>
-            <span className={styles.statLabel}>Faster intake</span>
-          </div>
-          <div className={styles.statDivider} />
-          <div className={styles.stat}>
-            <span className={styles.statNum}>2</span>
-            <span className={styles.statLabel}>Languages</span>
-          </div>
-          <div className={styles.statDivider} />
-          <div className={styles.stat}>
-            <span className={styles.statNum}>AI</span>
-            <span className={styles.statLabel}>Red-flag detection</span>
-          </div>
+        {/* Primary Hospital Intake Heading */}
+        <div className={styles.headingSection}>
+          <h1 className={styles.headline}>
+            Let&apos;s get your health history ready for the doctor.
+          </h1>
+          <p className={styles.headlineHi}>
+            डॉक्टर के लिए अपना स्वास्थ्य इतिहास तैयार करें।
+          </p>
+          <p className={styles.sub}>
+            You can speak or tap. We&apos;ll guide you step by step.
+          </p>
+          <p className={styles.subHi}>
+            आप बोलकर या छूकर बता सकते हैं। हम कदम-दर-कदम मार्गदर्शन करेंगे।
+          </p>
         </div>
 
-        {/* CTA */}
+        {/* Primary Kiosk Action Button */}
         <button
           id="landing-start-btn"
-          className={`btn btn-primary btn-xl ${styles.startBtn}`}
+          className={styles.startBtn}
           onClick={handleStart}
+          aria-label="Get Started / शुरू करें"
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path d="M8 5l8 7-8 7" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Get Started &nbsp;·&nbsp; शुरू करें
+          <span>शुरू करें &nbsp;·&nbsp; Get Started</span>
+          <ArrowRight size={28} strokeWidth={2.4} />
         </button>
 
-        {/* Ministry badge */}
-        {/*<div className={styles.ministry}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L2 7v10c0 4.4 4.27 8.5 10 10 5.73-1.5 10-5.6 10-10V7L12 2z"
-              fill="currentColor" opacity="0.6" />
-          </svg>
-          Ministry of Ayush &nbsp;|&nbsp; SIH26047
-        </div>*/}
+        {/* Clinical Capability Line */}
+        <div className={styles.capabilityRow}>
+          <div className={styles.capabilityItem}>
+            <Languages size={18} strokeWidth={2} />
+            <span>Hindi • English</span>
+          </div>
+          <span className={styles.capabilityDot}>•</span>
+          <div className={styles.capabilityItem}>
+            <Mic size={18} strokeWidth={2} />
+            <span>Voice / आवाज़</span>
+          </div>
+          <span className={styles.capabilityDot}>•</span>
+          <div className={styles.capabilityItem}>
+            <Touchpad size={18} strokeWidth={2} />
+            <span>Touch / टच</span>
+          </div>
+          <span className={styles.capabilityDot}>•</span>
+          <div className={styles.capabilityItem}>
+            <ShieldCheck size={18} strokeWidth={2} />
+            <span>Private &amp; Secure</span>
+          </div>
+        </div>
 
-        {/*<p className={styles.disclaimer}>
-          This is a demonstration prototype. Not intended for autonomous clinical diagnosis.
-        </p>*/}
-
-        {/* Doctor login link */}
+        {/* Doctor Login Link */}
         <button
           className={styles.doctorLoginLink}
           onClick={() => router.push('/doctor/login')}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2"/>
-          </svg>
-          Doctor Login
+          <Stethoscope size={16} strokeWidth={2} />
+          <span>Doctor Login &nbsp;·&nbsp; डॉक्टर लॉगिन</span>
         </button>
       </div>
     </main>

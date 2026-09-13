@@ -10,7 +10,9 @@ export default function DoctorLoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
+  const handleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (loading) return;
     if (!doctorId.trim()) {
       setError('Please enter your Doctor ID');
       return;
@@ -19,15 +21,15 @@ export default function DoctorLoginPage() {
     setError('');
 
     // For prototype: accept any non-empty Doctor ID
-    // In production, this would validate against a doctors table
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 200));
 
-    // Store doctor info in sessionStorage (not localStorage, so it's per-tab)
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('medcase_doctor', JSON.stringify({
+      const docData = JSON.stringify({
         id: doctorId.trim(),
         loginAt: new Date().toISOString(),
-      }));
+      });
+      sessionStorage.setItem('medcase_doctor', docData);
+      localStorage.setItem('medcase_doctor', docData);
     }
 
     setLoading(false);
@@ -73,6 +75,7 @@ export default function DoctorLoginPage() {
             className="btn btn-primary btn-lg"
             style={{ width: '100%' }}
             disabled={loading}
+            onClick={handleLogin}
           >
             {loading ? (
               <><div className="spinner" />Verifying...</>

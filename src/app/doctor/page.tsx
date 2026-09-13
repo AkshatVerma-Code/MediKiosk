@@ -2,6 +2,27 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  Stethoscope,
+  ArrowLeft,
+  LogOut,
+  Search,
+  X,
+  Clock,
+  User,
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  ClipboardList,
+  FileText,
+  FileCheck,
+  Pencil,
+  Copy,
+  CheckCheck,
+  ShieldAlert,
+  Activity,
+  Calendar
+} from 'lucide-react';
 import styles from './page.module.css';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -70,6 +91,7 @@ export default function DoctorDashboardPage() {
 
   // Auth check
   const [doctorId, setDoctorId] = useState<string | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
 
   // Card list state
   const [patients, setPatients] = useState<PatientCard[]>([]);
@@ -89,11 +111,15 @@ export default function DoctorDashboardPage() {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
+  // Copy state for OCR raw text
+  const [copiedDocId, setCopiedDocId] = useState<string | null>(null);
+
   // ─── Auth guard ───────────────────────────────────────────────────────
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem('medcase_doctor');
+      const stored = sessionStorage.getItem('medcase_doctor') || localStorage.getItem('medcase_doctor');
       if (!stored) {
+        setAuthChecking(false);
         router.push('/doctor/login');
         return;
       }
@@ -102,6 +128,8 @@ export default function DoctorDashboardPage() {
         setDoctorId(doc.id);
       } catch {
         router.push('/doctor/login');
+      } finally {
+        setAuthChecking(false);
       }
     }
   }, [router]);
@@ -203,7 +231,7 @@ export default function DoctorDashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'accepted' })
       });
-      // Optionally update the patients list so it reflects immediately if they go back
+      // Update patients list immediately
       setPatients(prev => prev.map(p => 
         p.sessionId === selectedSessionId ? { ...p, summaryStatus: 'accepted' } : p
       ));
@@ -217,96 +245,141 @@ export default function DoctorDashboardPage() {
     setEditValue('');
   };
 
-  // ─── Priority helpers ─────────────────────────────────────────────────
-  const priorityColor: Record<string, string> = {
-    URGENT: '#DC2626',
-    HIGH: '#D97706',
-    ROUTINE: '#2D7A3A',
-  };
-  const priorityBg: Record<string, string> = {
-    URGENT: '#FEE2E2',
-    HIGH: '#FEF3C7',
-    ROUTINE: '#DCFCE7',
+  // ─── Copy OCR text handler ────────────────────────────────────────────
+  const copyOcrText = (docId: string, text: string) => {
+    if (!navigator?.clipboard) return;
+    navigator.clipboard.writeText(text);
+    setCopiedDocId(docId);
+    setTimeout(() => {
+      setCopiedDocId(null);
+    }, 2000);
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────
-  if (!doctorId) return null;
+  if (authChecking || !doctorId) {
+    return (
+      <div className={styles.loadingWrap} style={{ minHeight: '100dvh' }}>
+        <div className="spinner" style={{ width: 44, height: 44, borderWidth: 3 }} />
+        <p>Verifying clinical session...</p>
+      </div>
+    );
+  }
 
   // ─── Detail View ──────────────────────────────────────────────────────
   if (selectedSessionId) {
     return (
       <div className={styles.main}>
         {/* Detail header */}
-        <div className={styles.detailHeader}>
+        <header className={styles.detailHeader}>
           <button className={styles.backBtn} onClick={goBackToList}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Back to Patients
+            <ArrowLeft size={16} />
+            <span>Back to Patients</span>
           </button>
-          <div className={styles.headerInfo}>
-            <h1 className={styles.headerTitle}>
-              👨‍⚕️ Doctor Dashboard
-            </h1>
-            <span className={styles.headerDocId}>ID: {doctorId}</span>
+          
+          <div className={styles.brandGroup}>
+            <div className={styles.stethoscopeBadge} style={{ width: 36, height: 36, borderRadius: 10 }}>
+              <Stethoscope size={18} />
+            </div>
+            <div>
+              <h1 className={styles.headerTitle} style={{ fontSize: 17 }}>MediKiosk Clinical Portal</h1>
+              <p className={styles.headerSub}>
+                Doctor Workstation
+                <span className={styles.docIdChip}>
+                  <span className={styles.statusDot} />
+                  ID: {doctorId}
+                </span>
+              </p>
+            </div>
           </div>
-        </div>
+        </header>
 
         {detailLoading ? (
           <div className={styles.loadingWrap}>
-            <div className="spinner" style={{ width: 48, height: 48, borderWidth: 4 }} />
-            <p>Loading patient details...</p>
+            <div className="spinner" style={{ width: 44, height: 44, borderWidth: 3 }} />
+            <p>Loading patient clinical record...</p>
           </div>
         ) : detail ? (
           <>
-            {/* Patient info bar */}
-            <div className={styles.patientBar}>
-              <div className={styles.patientAvatar}>
-                {detail.patient?.name?.charAt(0) || '?'}
-              </div>
-              <div style={{ flex: 1 }}>
-                <p className={styles.patientBarName}>{detail.patient?.name || 'Unknown'}</p>
-                <p className={styles.patientBarMeta}>
-                  {detail.patient?.age ? `${detail.patient.age} yrs` : ''} · {detail.patient?.gender || ''}
-                  {detail.patient?.abhaId ? ` · ABHA: ${detail.patient.abhaId}` : ''}
-                </p>
-              </div>
-              
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                {detail.redFlags.length > 0 && (
-                  <div className="badge badge-danger" style={{ fontSize: 15 }}>
-                    🚩 {detail.redFlags.length} Red Flag{detail.redFlags.length > 1 ? 's' : ''}
+            {/* Patient Hero / Banner */}
+            <section className={styles.patientHero}>
+              <div className={styles.heroContent}>
+                <div className={styles.heroLeft}>
+                  <div className={styles.heroAvatar}>
+                    {detail.patient?.name?.charAt(0) || <User size={26} />}
                   </div>
-                )}
+                  <div className={styles.heroInfo}>
+                    <h2 className={styles.heroName}>{detail.patient?.name || 'Unknown Patient'}</h2>
+                    <div className={styles.heroMeta}>
+                      <span>{detail.patient?.age ? `${detail.patient.age} yrs` : 'Age not recorded'}</span>
+                      <span>·</span>
+                      <span style={{ textTransform: 'capitalize' }}>{detail.patient?.gender || 'Gender unspecified'}</span>
+                      {detail.patient?.abhaId && (
+                        <>
+                          <span>·</span>
+                          <span className={styles.cardAbha} style={{ margin: 0 }}>
+                            ABHA: {detail.patient.abhaId}
+                          </span>
+                        </>
+                      )}
+                      <span>·</span>
+                      <span style={{ textTransform: 'capitalize' }}>
+                        {detail.session?.consultationType || 'General'} Consultation
+                      </span>
+                    </div>
+                  </div>
+                </div>
                 
-                {detail.summaryMeta?.status === 'accepted' ? (
-                  <div className="badge badge-success" style={{ fontSize: 15, padding: '8px 12px' }}>
-                    ✓ Diagnosed
-                  </div>
-                ) : (
-                  <button className="btn btn-primary" onClick={markDiagnosed}>
-                    Mark as Diagnosed
-                  </button>
-                )}
+                <div className={styles.heroActions}>
+                  {detail.redFlags.length > 0 && (
+                    <div className={styles.redFlagAlert}>
+                      <ShieldAlert size={16} />
+                      <span>{detail.redFlags.length} Red Flag{detail.redFlags.length > 1 ? 's' : ''} Detected</span>
+                    </div>
+                  )}
+                  
+                  {detail.summaryMeta?.status === 'accepted' ? (
+                    <div className={styles.diagnosedPill}>
+                      <CheckCircle2 size={18} />
+                      <span>Diagnosed & Verified</span>
+                    </div>
+                  ) : (
+                    <button className={styles.diagnoseBtn} onClick={markDiagnosed}>
+                      <CheckCircle2 size={16} />
+                      <span>Mark as Diagnosed</span>
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
+            </section>
 
-            {/* Tabs */}
-            <div className={styles.tabs}>
-              {(['summary', 'history', 'documents'] as const).map(tab => (
+            {/* Navigation Tabs */}
+            <div className={styles.detailTabsBar}>
+              <nav className={styles.detailTabs}>
                 <button
-                  key={tab}
-                  className={`${styles.tab} ${activeTab === tab ? styles.tabActive : ''}`}
-                  onClick={() => setActiveTab(tab)}
+                  className={`${styles.detailTab} ${activeTab === 'summary' ? styles.detailTabActive : ''}`}
+                  onClick={() => setActiveTab('summary')}
                 >
-                  {tab === 'summary' && '📋'} {tab === 'history' && '📝'} {tab === 'documents' && '📄'}
-                  {' '}{tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  <FileText size={16} />
+                  <span>Clinical Summary</span>
                 </button>
-              ))}
+                <button
+                  className={`${styles.detailTab} ${activeTab === 'history' ? styles.detailTabActive : ''}`}
+                  onClick={() => setActiveTab('history')}
+                >
+                  <ClipboardList size={16} />
+                  <span>Case History</span>
+                </button>
+                <button
+                  className={`${styles.detailTab} ${activeTab === 'documents' ? styles.detailTabActive : ''}`}
+                  onClick={() => setActiveTab('documents')}
+                >
+                  <FileCheck size={16} />
+                  <span>Documents & OCR ({detail.documents.length})</span>
+                </button>
+              </nav>
             </div>
 
             {/* Tab content */}
-            <div className={styles.content}>
+            <div className={styles.detailContent}>
               {/* SUMMARY TAB */}
               {activeTab === 'summary' && (
                 <div className="animate-fade-in">
@@ -317,7 +390,7 @@ export default function DoctorDashboardPage() {
                         .map(([key, value]) => (
                           <div key={key} className={styles.summaryRow}>
                             <div className={styles.summaryKey}>
-                              {key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                              {key.replace(/_/g, ' ')}
                             </div>
                             <div className={styles.summaryValue}>
                               {editingField === key ? (
@@ -329,28 +402,41 @@ export default function DoctorDashboardPage() {
                                   autoFocus
                                 />
                               ) : (
-                                Array.isArray(value)
-                                  ? value.length > 0
-                                    ? value.map((v, i) => (
-                                        <span key={i} className="badge badge-gray" style={{ marginRight: 4, marginBottom: 4 }}>
-                                          {toSafeString(v)}
-                                        </span>
-                                      ))
-                                    : <span className={styles.empty}>—</span>
-                                  : typeof value === 'object' && value !== null
-                                    ? <span>{toSafeString(value)}</span>
-                                    : <span>{String(value ?? '—')}</span>
+                                Array.isArray(value) ? (
+                                  value.length > 0 ? (
+                                    value.map((v, i) => (
+                                      <span key={i} className={styles.clinicalChip}>
+                                        {toSafeString(v)}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className={styles.emptyDash}>—</span>
+                                  )
+                                ) : typeof value === 'object' && value !== null ? (
+                                  <span>{toSafeString(value)}</span>
+                                ) : (
+                                  <span>{String(value || '—')}</span>
+                                )
                               )}
                             </div>
                             <div className={styles.editActions}>
                               {editingField === key ? (
                                 <>
-                                  <button className="btn btn-primary btn-sm" onClick={saveEdit}>Save</button>
-                                  <button className="btn btn-ghost btn-sm" onClick={cancelEdit}>✕</button>
+                                  <button className={styles.saveBtn} onClick={saveEdit} title="Save changes">
+                                    <Check size={14} />
+                                    Save
+                                  </button>
+                                  <button className={styles.cancelBtn} onClick={cancelEdit} title="Cancel">
+                                    <X size={14} />
+                                  </button>
                                 </>
                               ) : (
-                                <button className="btn btn-ghost btn-sm" onClick={() => startEdit(key, value)} title="Edit">
-                                  ✏️
+                                <button
+                                  className={styles.editBtn}
+                                  onClick={() => startEdit(key, value)}
+                                  title="Edit entry"
+                                >
+                                  <Pencil size={15} />
                                 </button>
                               )}
                             </div>
@@ -359,7 +445,11 @@ export default function DoctorDashboardPage() {
                     </div>
                   ) : (
                     <div className={styles.emptyState}>
-                      Summary not available for this session.
+                      <div className={styles.emptyIconCircle}>
+                        <FileText size={32} />
+                      </div>
+                      <h3>No Summary Available</h3>
+                      <p>Clinical summary is not yet generated for this consultation session.</p>
                     </div>
                   )}
                 </div>
@@ -401,19 +491,38 @@ export default function DoctorDashboardPage() {
               {activeTab === 'documents' && (
                 <div className="animate-fade-in">
                   {detail.documents.length === 0 ? (
-                    <div className={styles.emptyState}>No documents uploaded</div>
+                    <div className={styles.emptyState}>
+                      <div className={styles.emptyIconCircle}>
+                        <FileCheck size={32} />
+                      </div>
+                      <h3>No Documents Uploaded</h3>
+                      <p>The patient did not provide any clinical documents or test reports.</p>
+                    </div>
                   ) : (
-                    detail.documents.map((doc, i) => (
-                      <div key={doc.id || i} className={styles.card} style={{ marginBottom: 16 }}>
-                        <div className={styles.docHeader}>
-                          <span>📄 Document {i + 1}</span>
-                          <span className={`badge ${doc.confidence === 'HIGH' ? 'badge-success' : 'badge-warning'}`}>
-                            {doc.confidence || 'NEEDS_VERIFICATION'}
-                          </span>
-                        </div>
-                        {doc.extractedData && (
-                          <div style={{ padding: '12px 20px' }}>
-                            {Object.entries(doc.extractedData)
+                    detail.documents.map((doc, i) => {
+                      const docKey = doc.id || `doc-${i}`;
+                      const isHighConf = doc.confidence === 'HIGH';
+                      return (
+                        <div key={docKey} className={styles.docCard}>
+                          <div className={styles.docHeader}>
+                            <div className={styles.docHeaderTitle}>
+                              <FileText size={18} color="var(--green-600)" />
+                              <span>Document {i + 1}</span>
+                              {doc.uploadDate && (
+                                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>
+                                  ({new Date(doc.uploadDate).toLocaleDateString()})
+                                </span>
+                              )}
+                            </div>
+                            <span className={`${styles.confBadge} ${isHighConf ? styles.confHigh : styles.confVerify}`}>
+                              {isHighConf ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+                              {doc.confidence || 'NEEDS_VERIFICATION'}
+                            </span>
+                          </div>
+
+                          <div className={styles.docBody}>
+                            {/* Structured Findings */}
+                            {doc.extractedData && Object.entries(doc.extractedData)
                               .filter(([k, v]) => {
                                 if (['raw_text', 'confidence'].includes(k)) return false;
                                 if (Array.isArray(v) && v.length === 0) return false;
@@ -421,98 +530,159 @@ export default function DoctorDashboardPage() {
                                 return true;
                               })
                               .map(([k, v]) => (
-                                <div key={k} style={{ marginBottom: 8 }}>
-                                  <strong style={{ textTransform: 'capitalize' }}>{k.replace(/_/g, ' ')}:</strong>{' '}
-                                  {toSafeString(v)}
+                                <div key={k} className={styles.structuredItem}>
+                                  <span className={styles.structuredLabel}>{k.replace(/_/g, ' ')}</span>
+                                  <div className={styles.structuredValue}>{toSafeString(v)}</div>
                                 </div>
                               ))}
-                              
-                            {/* Ensure raw OCR text is visible for verification */}
+
+                            {/* Raw Document OCR Viewer */}
                             {doc.rawText && (
-                              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                                <strong style={{ display: 'block', marginBottom: 8, color: 'var(--text-muted)' }}>Raw Document Text (OCR):</strong>
-                                <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: 12, borderRadius: 6, margin: 0 }}>
-                                  {doc.rawText}
-                                </pre>
+                              <div className={styles.ocrTerminal}>
+                                <div className={styles.ocrTerminalHeader}>
+                                  <div className={styles.ocrTerminalTitle}>
+                                    <FileCheck size={15} />
+                                    <span>Raw OCR Extract</span>
+                                  </div>
+                                  <button
+                                    className={styles.copyBtn}
+                                    onClick={() => copyOcrText(docKey, doc.rawText)}
+                                    title="Copy extracted text"
+                                  >
+                                    {copiedDocId === docKey ? (
+                                      <>
+                                        <CheckCheck size={13} color="var(--green-600)" />
+                                        <span>Copied</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy size={13} />
+                                        <span>Copy Text</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                                <pre className={styles.ocrPre}>{doc.rawText}</pre>
                               </div>
                             )}
                           </div>
-                        )}
-                      </div>
-                    ))
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               )}
             </div>
           </>
         ) : (
-          <div className={styles.emptyState}>Failed to load patient details.</div>
+          <div className={styles.emptyState} style={{ margin: 28 }}>
+            <div className={styles.emptyIconCircle}>
+              <AlertTriangle size={32} />
+            </div>
+            <h3>Failed to Load Record</h3>
+            <p>Could not retrieve patient details. Please try again or return to the list.</p>
+          </div>
         )}
       </div>
     );
   }
 
   // ─── Patient Cards List View ──────────────────────────────────────────
+  const pendingCount = patients.filter(p => p.summaryStatus !== 'accepted').length;
+  const diagnosedCount = patients.filter(p => p.summaryStatus === 'accepted').length;
+
   return (
     <div className={styles.main}>
       {/* Dashboard header */}
-      <div className={styles.dashHeader}>
-        <div className={styles.headerInfo}>
-          <h1 className={styles.headerTitle}>👨‍⚕️ Doctor Dashboard</h1>
-          <p className={styles.headerSub}>Today&apos;s patients · Doctor ID: {doctorId}</p>
+      <header className={styles.dashHeader}>
+        <div className={styles.brandGroup}>
+          <div className={styles.stethoscopeBadge}>
+            <Stethoscope size={24} />
+          </div>
+          <div className={styles.headerInfo}>
+            <h1 className={styles.headerTitle}>MediKiosk Doctor Portal</h1>
+            <p className={styles.headerSub}>
+              Clinical Workstation
+              <span className={styles.docIdChip}>
+                <span className={styles.statusDot} />
+                Doctor ID: {doctorId}
+              </span>
+            </p>
+          </div>
         </div>
+
         <button
-          className="btn btn-ghost"
+          className={styles.logoutBtn}
           onClick={() => {
-            if (typeof window !== 'undefined') sessionStorage.removeItem('medcase_doctor');
+            if (typeof window !== 'undefined') {
+              sessionStorage.removeItem('medcase_doctor');
+              localStorage.removeItem('medcase_doctor');
+            }
             router.push('/');
           }}
         >
-          Logout
+          <LogOut size={16} />
+          <span>Logout</span>
         </button>
+      </header>
+
+      {/* Control bar: Tabs + Search */}
+      <div className={styles.controlBar}>
+        {/* Dashboard Tabs */}
+        <div className={styles.tabPills}>
+          <button
+            className={`${styles.tabPill} ${dashboardTab === 'pending' ? styles.tabPillActive : ''}`}
+            onClick={() => setDashboardTab('pending')}
+          >
+            <Clock size={15} />
+            <span>Pending Review</span>
+            <span className={styles.pillBadge}>{pendingCount}</span>
+          </button>
+          <button
+            className={`${styles.tabPill} ${dashboardTab === 'diagnosed' ? styles.tabPillActive : ''}`}
+            onClick={() => setDashboardTab('diagnosed')}
+          >
+            <CheckCircle2 size={15} />
+            <span>Diagnosed</span>
+            <span className={styles.pillBadge}>{diagnosedCount}</span>
+          </button>
+        </div>
+
+        {/* Search bar */}
+        <div className={styles.searchWrap}>
+          <Search size={16} className={styles.searchIcon} />
+          <input
+            id="doctor-search"
+            className={styles.searchInput}
+            type="text"
+            placeholder="Search patient name, ABHA ID or session..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {search && (
+            <button className={styles.searchClear} onClick={() => setSearch('')} title="Clear search">
+              <X size={12} />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Dashboard Tabs */}
-      <div className={styles.tabs} style={{ padding: '0 24px', borderBottom: '1px solid var(--border)' }}>
-        <button
-          className={`${styles.tab} ${dashboardTab === 'pending' ? styles.tabActive : ''}`}
-          onClick={() => setDashboardTab('pending')}
-        >
-          📋 Pending ({patients.filter(p => p.summaryStatus !== 'accepted').length})
-        </button>
-        <button
-          className={`${styles.tab} ${dashboardTab === 'diagnosed' ? styles.tabActive : ''}`}
-          onClick={() => setDashboardTab('diagnosed')}
-        >
-          ✓ Diagnosed ({patients.filter(p => p.summaryStatus === 'accepted').length})
-        </button>
-      </div>
+      {/* Patient cards container */}
+      <main className={styles.cardsContainer}>
+        <div className={styles.sectionHeader}>
+          <div className={styles.sectionTitle}>
+            <Activity size={16} color="var(--green-600)" />
+            <span>{dashboardTab === 'pending' ? 'Active Consultation Queue' : 'Completed Diagnoses'}</span>
+          </div>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>
+            Showing {dashboardTab === 'pending' ? pendingCount : diagnosedCount} records
+          </span>
+        </div>
 
-      {/* Search bar */}
-      <div className={styles.searchWrap}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className={styles.searchIcon}>
-          <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
-          <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-        </svg>
-        <input
-          id="doctor-search"
-          className={styles.searchInput}
-          type="text"
-          placeholder="Search by patient name or ABHA ID..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-        {search && (
-          <button className={styles.searchClear} onClick={() => setSearch('')}>✕</button>
-        )}
-      </div>
-
-      {/* Patient cards */}
-      <div className={styles.cardsContainer}>
         {listLoading ? (
           <div className={styles.loadingWrap}>
-            <div className="spinner" style={{ width: 40, height: 40, borderWidth: 3 }} />
-            <p>Loading patients...</p>
+            <div className="spinner" style={{ width: 44, height: 44, borderWidth: 3 }} />
+            <p>Loading patient records...</p>
           </div>
         ) : (() => {
           const filtered = patients.filter(p => dashboardTab === 'diagnosed' ? p.summaryStatus === 'accepted' : p.summaryStatus !== 'accepted');
@@ -520,61 +690,82 @@ export default function DoctorDashboardPage() {
           if (filtered.length === 0) {
             return (
               <div className={styles.emptyState}>
-                <div className={styles.emptyIcon}>📋</div>
-                <h3>No patients found</h3>
-                <p>{search ? 'No matching patients. Try a different search.' : `No ${dashboardTab} patients found.`}</p>
+                <div className={styles.emptyIconCircle}>
+                  <ClipboardList size={34} />
+                </div>
+                <h3>No Patients Found</h3>
+                <p>
+                  {search
+                    ? 'No matching patient records found. Try a different name or ABHA ID.'
+                    : `There are currently no ${dashboardTab === 'pending' ? 'pending' : 'diagnosed'} consultations in queue.`}
+                </p>
               </div>
             );
           }
 
           return (
             <div className={styles.cardsGrid}>
-              {filtered.map(p => (
-              <button
-                key={p.sessionId}
-                className={styles.patientCard}
-                onClick={() => openPatient(p.sessionId)}
-              >
-                <div className={styles.cardTop}>
-                  <div className={styles.cardAvatar}>
-                    {p.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div
-                    className={styles.cardPriority}
-                    style={{
-                      color: priorityColor[p.priority] || '#2D7A3A',
-                      background: priorityBg[p.priority] || '#DCFCE7',
-                    }}
+              {filtered.map(p => {
+                const priorityKey = (p.priority?.toLowerCase() || 'routine') as 'routine' | 'high' | 'urgent';
+                const priorityClass = styles[`priority_${priorityKey}`] || styles.priority_routine;
+
+                return (
+                  <button
+                    key={p.sessionId}
+                    className={styles.patientCard}
+                    onClick={() => openPatient(p.sessionId)}
                   >
-                    {p.priority}
-                  </div>
-                </div>
-                <div className={styles.cardBody}>
-                  <h3 className={styles.cardName}>{p.name}</h3>
-                  <div className={styles.cardMeta}>
-                    {p.age && <span>{p.age} yrs</span>}
-                    {p.gender && <span>· {p.gender}</span>}
-                  </div>
-                  {p.abhaId && (
-                    <div className={styles.cardAbha}>
-                      ABHA: {p.abhaId}
+                    <div className={styles.cardTop}>
+                      <div className={styles.cardAvatar}>
+                        {p.name.charAt(0).toUpperCase()}
+                      </div>
+                      <span className={`${styles.priorityBadge} ${priorityClass}`}>
+                        {p.priority === 'URGENT' && <AlertTriangle size={11} />}
+                        {p.priority}
+                      </span>
                     </div>
-                  )}
-                  <div className={styles.cardFooter}>
-                    <span className={styles.cardTime}>
-                      {new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    <span className={`${styles.cardStatus} ${p.status === 'complete' ? styles.statusComplete : ''}`}>
-                      {p.status === 'complete' ? '✓ Complete' : 'Active'}
-                    </span>
-                  </div>
-                </div>
-              </button>
-            ))}
+
+                    <div className={styles.cardBody}>
+                      <h3 className={styles.cardName}>{p.name}</h3>
+                      <div className={styles.cardMeta}>
+                        <span>{p.age ? `${p.age} yrs` : 'Age N/A'}</span>
+                        <span>·</span>
+                        <span style={{ textTransform: 'capitalize' }}>{p.gender || 'Other'}</span>
+                      </div>
+                      
+                      {p.abhaId && (
+                        <div className={styles.cardAbha}>
+                          ABHA: {p.abhaId}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className={styles.cardFooter}>
+                      <span className={styles.cardTime}>
+                        <Clock size={12} />
+                        {new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span className={`${styles.cardStatus} ${p.status === 'complete' ? styles.statusComplete : ''}`}>
+                        {p.status === 'complete' ? (
+                          <>
+                            <CheckCircle2 size={12} />
+                            Completed
+                          </>
+                        ) : (
+                          <>
+                            <Activity size={12} />
+                            In Progress
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           );
         })()}
-      </div>
+      </main>
     </div>
   );
 }

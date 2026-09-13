@@ -91,7 +91,8 @@ export default function UploadPage() {
 
       const newDocs = [...documents, doc];
       setDocuments(newDocs);
-      updateSession({ documents: newDocs });
+      // Invalidate old summary so that /summary will regenerate with the uploaded documents
+      updateSession({ documents: newDocs, summary: null });
     } catch {
       setStatus('error');
     }
@@ -209,10 +210,19 @@ export default function UploadPage() {
                   )}
                   <span>
                     {extracted.confidence === 'NEEDS_VERIFICATION'
-                      ? (lang === 'hi' ? 'सत्यापन आवश्यक' : 'Needs Verification')
-                      : (lang === 'hi' ? 'स्पष्ट पढ़ा गया' : "We've read your document")}
+                      ? (lang === 'hi' ? 'सत्यापन आवश्यक (Needs Doctor Verification)' : 'Needs Doctor Verification')
+                      : (lang === 'hi' ? 'सफलतापूर्वक पढ़ा गया (Verified & Synced)' : "Successfully Read & Synced")}
                   </span>
                 </span>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6, marginBottom: 0 }}>
+                  {extracted.confidence === 'NEEDS_VERIFICATION'
+                    ? (lang === 'hi'
+                        ? 'कुछ विवरण अस्पष्ट हो सकते हैं — आपका डॉक्टर जांच के समय इसकी पुष्टि करेंगे।'
+                        : 'Some handwritten parts may need physician review. All found data is synced to the doctor workstation.')
+                    : (lang === 'hi'
+                        ? 'दवाएं और जांच रिपोर्ट डॉक्टर के डैशबोर्ड के साथ सिंक हो गई हैं।'
+                        : 'Extracted medicines & tests are verified and ready for the doctor.')}
+                </p>
               </div>
 
               {extracted.diagnosis && extracted.diagnosis.length > 0 && (

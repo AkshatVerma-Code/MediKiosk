@@ -140,6 +140,7 @@ export default function SummaryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [persisted, setPersisted] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
 
   const lang = session.language;
 
@@ -153,25 +154,45 @@ export default function SummaryPage() {
     saveSession(updated);
   };
 
-  useEffect(() => {
-    const s = loadSession();
-    setSession(s);
-    setMounted(true);
+  // ─── Persist entire session to Supabase once summary is ready ─────
+  const persistToSupabase = async (activeSession: AppSession, summaryData: AISummary) => {
+    setSyncStatus('syncing');
+    try {
+      const resp = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: activeSession.sessionId || undefined,
+          patient: activeSession.patient,
+          clinicalState: activeSession.clinicalState,
+          messages: activeSession.messages,
+          redFlags: activeSession.redFlags,
+          documents: activeSession.documents,
+          language: activeSession.language,
+          consultationType: activeSession.consultationType,
+          consentGiven: activeSession.consentGiven,
+          summary: summaryData,
+        }),
+      });
 
-    if (s.summary) {
-      try {
-        const parsed = JSON.parse(s.summary);
-        // Sanitize to ensure no raw objects slip through to React rendering
-        setSummary(sanitizeSummary(parsed as Record<string, unknown>));
-        setLoading(false);
-        if (s.documents && s.documents.length > 0) {
-          generateSummary(s);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.session_id) {
+          const updated = { ...activeSession, sessionId: data.session_id };
+          setSession(updated);
+          saveSession(updated);
         }
-        return;
-      } catch {}
+        setPersisted(true);
+        setSyncStatus('synced');
+      } else {
+        console.error('Session persistence HTTP error:', resp.status);
+        setSyncStatus('error');
+      }
+    } catch (err) {
+      console.error('Failed to persist session to Supabase:', err);
+      setSyncStatus('error');
     }
-    generateSummary(s);
-  }, []); // eslint-disable-line
+  };
 
   const generateSummary = async (sess?: AppSession) => {
     const active = sess || session;
@@ -191,12 +212,13 @@ export default function SummaryPage() {
 
       if (resp.ok) {
         const data = await resp.json();
-        // Sanitize AI response before rendering — the model sometimes returns
-        // nested objects (e.g. history_of_present_illness as an object) instead
-        // of the expected flat strings, which causes React to throw.
         const safe = sanitizeSummary(data.summary as Record<string, unknown>);
         setSummary(safe);
-        updateSession({ summary: JSON.stringify(safe) });
+        const updated = { ...active, summary: JSON.stringify(safe) };
+        setSession(updated);
+        saveSession(updated);
+        // Persist immediately with the complete summary and documents
+        await persistToSupabase(updated, safe);
       } else {
         setError(true);
       }
@@ -207,6 +229,29 @@ export default function SummaryPage() {
     }
   };
 
+  useEffect(() => {
+    const s = loadSession();
+    setSession(s);
+    setMounted(true);
+
+    const hasDocs = Array.isArray(s.documents) && s.documents.length > 0;
+
+    // If documents were uploaded or summary is missing, regenerate summary with documents
+    if (!s.summary || hasDocs) {
+      generateSummary(s);
+    } else {
+      try {
+        const parsed = JSON.parse(s.summary);
+        const safe = sanitizeSummary(parsed as Record<string, unknown>);
+        setSummary(safe);
+        setLoading(false);
+        persistToSupabase(s, safe);
+      } catch {
+        generateSummary(s);
+      }
+    }
+  }, []); // eslint-disable-line
+
   const handleNewSession = () => {
     // Clear session and go back to landing
     if (typeof window !== 'undefined') {
@@ -214,40 +259,6 @@ export default function SummaryPage() {
     }
     router.push('/');
   };
-
-  // ─── Persist entire session to Supabase once summary is ready ─────
-  const persistToSupabase = async (summaryData: AISummary) => {
-    if (persisted) return; // Only persist once
-    setPersisted(true);
-    try {
-      await fetch('/api/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patient: session.patient,
-          clinicalState: session.clinicalState,
-          messages: session.messages,
-          redFlags: session.redFlags,
-          documents: session.documents,
-          language: session.language,
-          consultationType: session.consultationType,
-          consentGiven: session.consentGiven,
-          summary: summaryData,
-        }),
-      });
-    } catch (err) {
-      console.error('Failed to persist session to Supabase:', err);
-      // Don't block the UI if persistence fails — the patient can still see their summary
-    }
-  };
-
-  // Trigger persistence when summary becomes available
-  useEffect(() => {
-    if (summary && !persisted) {
-      persistToSupabase(summary);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary]);
 
   if (!mounted) {
     return (

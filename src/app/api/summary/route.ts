@@ -84,22 +84,33 @@ Generate a structured, complete report. Return ONLY valid JSON with no markdown 
     // 2. Try Gemini if available
     if (geminiKey) {
       try {
-        const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
+        const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent';
         const gResp = await fetch(`${geminiUrl}?key=${geminiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2, maxOutputTokens: 2000 },
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 3000,
+              responseMimeType: 'application/json',
+            },
           }),
         });
 
         if (gResp.ok) {
           const gData = await gResp.json();
           const rawText = gData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          const cleanText = rawText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+          let cleanText = rawText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+          const firstBrace = cleanText.indexOf('{');
+          const lastBrace = cleanText.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            cleanText = cleanText.slice(firstBrace, lastBrace + 1);
+          }
           const parsed = JSON.parse(cleanText);
-          return NextResponse.json({ summary: parsed });
+          if (parsed.chief_complaint || parsed.summary_text) {
+            return NextResponse.json({ summary: parsed });
+          }
         }
       } catch (gErr) {
         console.warn('Gemini summary generation failed, falling back:', gErr);
@@ -107,18 +118,19 @@ Generate a structured, complete report. Return ONLY valid JSON with no markdown 
     }
 
     // 3. Robust, complete deterministic fallback report
-    const fallbackSummary = buildCompleteFallbackSummary(clinical_state || {}, red_flags || [], isHi);
+    const fallbackSummary = buildCompleteFallbackSummary(clinical_state || {}, red_flags || [], isHi, documents || []);
     return NextResponse.json({ summary: fallbackSummary });
   } catch (err) {
     console.error('Summary route error:', err);
-    return NextResponse.json({ summary: buildCompleteFallbackSummary({}, [], false) });
+    return NextResponse.json({ summary: buildCompleteFallbackSummary({}, [], false, []) });
   }
 }
 
 function buildCompleteFallbackSummary(
   cs: Record<string, any>,
   redFlags: { rule_name?: string; severity?: string; description?: string }[],
-  isHi: boolean
+  isHi: boolean,
+  documents: Record<string, any>[] = []
 ) {
   const sevScore = typeof cs.severity === 'number' ? cs.severity : 4;
   const sevLevel = sevScore >= 9 ? 'CRITICAL' : sevScore >= 7 ? 'SEVERE' : sevScore >= 4 ? 'MODERATE' : 'MILD';
@@ -142,10 +154,57 @@ function buildCompleteFallbackSummary(
   const location = cs.location ? (isHi ? `, स्थान: ${cs.location}` : `, Site: ${cs.location}`) : '';
   const radiation = cs.radiation ? (isHi ? `, फैलाव: ${cs.radiation}` : `, Radiation: ${cs.radiation}`) : '';
 
-  // Complaint-specific Q&A that the dynamic question engine asked but that
-  // doesn't fit a fixed field (e.g. for an animal bite: which animal, wound
-  // care, vaccination status). Always fold these into the narrative so
-  // nothing gets silently dropped, even in this fully-offline fallback.
+  // Extract findings from uploaded documents
+  const docMeds: { name: string; dose: string | null; frequency: string | null }[] = [];
+  const docLabs: { name: string; value: string; status: string }[] = [];
+  const docDiagnoses: string[] = [];
+
+  for (const doc of documents) {
+    if (Array.isArray(doc.medications)) {
+      for (const m of doc.medications) {
+        if (m && m.name) {
+          docMeds.push({
+            name: m.name,
+            dose: m.dose || null,
+            frequency: m.frequency || null,
+          });
+        }
+      }
+    }
+    if (Array.isArray(doc.labs)) {
+      for (const l of doc.labs) {
+        if (l && l.name) {
+          docLabs.push({
+            name: l.name,
+            value: `${l.value || ''} ${l.unit || ''}`.trim(),
+            status: l.status || 'NORMAL',
+          });
+        }
+      }
+    }
+    if (Array.isArray(doc.diagnosis)) {
+      for (const d of doc.diagnosis) {
+        if (d && typeof d === 'string') {
+          docDiagnoses.push(d);
+        }
+      }
+    }
+  }
+
+  // Combine interview medications and document medications
+  const combinedMeds: { name: string; dose: string | null; frequency: string | null }[] = [];
+  if (Array.isArray(cs.medications)) {
+    for (const m of cs.medications) {
+      if (m) combinedMeds.push({ name: String(m), dose: null, frequency: null });
+    }
+  }
+  for (const dm of docMeds) {
+    if (!combinedMeds.some(m => m.name.toLowerCase() === dm.name.toLowerCase())) {
+      combinedMeds.push(dm);
+    }
+  }
+
+  // Complaint-specific Q&A that the dynamic question engine asked
   const additionalFindings: { field?: string; question?: string; answer?: string }[] =
     Array.isArray(cs.additional_findings) ? cs.additional_findings : [];
   const findingsNarrative = additionalFindings.length > 0
@@ -154,13 +213,24 @@ function buildCompleteFallbackSummary(
         : ' Additional findings: ' + additionalFindings.map(f => `${f.question || f.field} — ${f.answer}`).join('; ') + '.')
     : '';
 
+  const docNote = documents.length > 0
+    ? (isHi
+        ? ` रोगी द्वारा ${documents.length} दस्तावेज़/नुस्खे अपलोड किए गए हैं जिसमें दवाएं व जांच रिपोर्ट दर्ज हैं।`
+        : ` Patient provided ${documents.length} uploaded medical document(s) with historical prescriptions/reports.`)
+    : '';
+
   const hpi = isHi
-    ? `रोगी ने "${chief}" की शिकायत दर्ज की है, जो ${onset} से है${character}${location}${radiation}। गंभीरता स्तर ${sevScore}/10 (${sevLevel}) आंका गया है।${findingsNarrative}`
-    : `Patient presents with ${chief} of ${onset} duration${character}${location}${radiation}. Severity scaled at ${sevScore}/10 (${sevLevel}).${findingsNarrative}`;
+    ? `रोगी ने "${chief}" की शिकायत दर्ज की है, जो ${onset} से है${character}${location}${radiation}। गंभीरता स्तर ${sevScore}/10 (${sevLevel}) आंका गया है।${findingsNarrative}${docNote}`
+    : `Patient presents with ${chief} of ${onset} duration${character}${location}${radiation}. Severity scaled at ${sevScore}/10 (${sevLevel}).${findingsNarrative}${docNote}`;
 
   const summaryNarrative = isHi
-    ? `रोगी को ${chief} की समस्या है (${onset})। कुल गंभीरता स्तर ${sevScore}/10 (${sevLevel}) है। ${hasRedFlags ? 'चेतावनी संकेत (Red Flags) मौजूद हैं — तुरंत डॉक्टर जांच आवश्यक है।' : 'प्राथमिक जांच व लक्षणों के अनुसार डॉक्टर परामर्श की सलाह दी जाती है।'}`
-    : `Patient reports ${chief} with onset ${onset}. Overall severity scaled at ${sevScore}/10 (${sevLevel}). ${hasRedFlags ? 'Red flags detected — urgent clinical evaluation recommended.' : 'Routine outpatient medical consultation recommended.'}`;
+    ? `रोगी को ${chief} की समस्या है (${onset})। कुल गंभीरता स्तर ${sevScore}/10 (${sevLevel}) है। ${hasRedFlags ? 'चेतावनी संकेत (Red Flags) मौजूद हैं — तुरंत डॉक्टर जांच आवश्यक है।' : 'प्राथमिक जांच व लक्षणों के अनुसार डॉक्टर परामर्श की सलाह दी जाती है।'}${docNote}`
+    : `Patient reports ${chief} with onset ${onset}. Overall severity scaled at ${sevScore}/10 (${sevLevel}). ${hasRedFlags ? 'Red flags detected — urgent clinical evaluation recommended.' : 'Routine outpatient medical consultation recommended.'}${docNote}`;
+
+  const combinedPastHistory = [
+    ...(cs.past_history || []),
+    ...docDiagnoses,
+  ];
 
   return {
     chief_complaint: `${chief} (${onset})`,
@@ -173,11 +243,11 @@ function buildCompleteFallbackSummary(
         : `Severity score ${sevScore}/10 (${sevLevel})`,
     },
     associated_symptoms: Array.from(new Set(symptomsList)),
-    past_medical_history: cs.past_history || (isHi ? ['कोई ज्ञात पुरानी बीमारी नहीं बताई गई'] : ['None reported']),
-    current_medications: Array.isArray(cs.medications)
-      ? cs.medications.map((m: string) => ({ name: m, dose: null, frequency: null }))
-      : [],
-    relevant_investigations: [],
+    past_medical_history: combinedPastHistory.length > 0
+      ? Array.from(new Set(combinedPastHistory))
+      : (isHi ? ['कोई ज्ञात पुरानी बीमारी नहीं बताई गई'] : ['None reported']),
+    current_medications: combinedMeds,
+    relevant_investigations: docLabs,
     red_flags: redFlags.map((f) => f.description || f.rule_name || 'Warning indicator'),
     priority,
     recommended_actions: [
@@ -185,6 +255,7 @@ function buildCompleteFallbackSummary(
       hasRedFlags || sevScore >= 8
         ? (isHi ? 'तत्काल ईसीजी / आवश्यक रक्त जांच व वाइटल्स निगरानी' : 'Urgent vitals monitoring, ECG/Stat labs')
         : (isHi ? 'दवा एवं घरेलू उपचार संबंधी निर्देश' : 'Prescription medication and care instructions'),
+      ...(documents.length > 0 ? [isHi ? 'अपलोड किए गए नुस्खे व पिछली दवाओं का मिलान' : 'Reconciliation of uploaded previous prescriptions/medications'] : []),
     ],
     summary_text: summaryNarrative,
     ai_disclaimer: isHi

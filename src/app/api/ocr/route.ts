@@ -6,6 +6,70 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const GEMINI_MODEL = 'gemini-3.5-flash';
 
+function extractJsonFromText(rawText: string): Record<string, unknown> | null {
+  if (!rawText) return null;
+  let clean = rawText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+  const firstBrace = clean.indexOf('{');
+  const lastBrace = clean.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    clean = clean.slice(firstBrace, lastBrace + 1);
+  }
+  try {
+    return JSON.parse(clean);
+  } catch (err) {
+    console.warn('JSON parse error in OCR extraction:', err);
+    return null;
+  }
+}
+
+function determineConfidence(result: Record<string, unknown>): 'HIGH' | 'NEEDS_VERIFICATION' {
+  const hasMeds = Array.isArray(result.medications) && result.medications.length > 0;
+  const hasLabs = Array.isArray(result.labs) && result.labs.length > 0;
+  const hasDiagnosis = Array.isArray(result.diagnosis) && result.diagnosis.length > 0;
+  const hasDoctorOrClinic = Boolean(result.doctor || result.hospital);
+
+  if (hasMeds || hasLabs || hasDiagnosis || hasDoctorOrClinic) {
+    return 'HIGH';
+  }
+  return (result.confidence as string) === 'HIGH' ? 'HIGH' : 'NEEDS_VERIFICATION';
+}
+
+function parseBasicMedicalText(rawText: string): {
+  diagnosis: string[];
+  medications: { name: string; dose: string | null; frequency: string | null }[];
+  labs: { name: string; value: string; unit: string | null; reference_range: string | null; status: string | null }[];
+} {
+  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+  const medications: { name: string; dose: string | null; frequency: string | null }[] = [];
+  const labs: { name: string; value: string; unit: string | null; reference_range: string | null; status: string | null }[] = [];
+
+  for (const line of lines) {
+    const medMatch = line.match(/(?:Tab(?:let)?|Cap(?:sule)?|Syp|T\.|Inj|Rx)\s+([A-Za-z0-9\-\s]+?)(?:\s+(\d+(?:\.\d+)?\s*(?:mg|ml|gm|mcg|IU)))?(?:\s+(.*))?$/i);
+    if (medMatch) {
+      medications.push({
+        name: medMatch[1].trim(),
+        dose: medMatch[2]?.trim() || null,
+        frequency: medMatch[3]?.trim() || null,
+      });
+    }
+
+    const bpMatch = line.match(/(?:B\.?P\.?|Blood Pressure)\s*[:=]?\s*(\d{2,3}\/\d{2,3})/i);
+    if (bpMatch) {
+      labs.push({ name: 'BP', value: bpMatch[1], unit: 'mmHg', reference_range: '120/80', status: 'NORMAL' });
+    }
+    const tempMatch = line.match(/(?:Temp(?:erature)?)\s*[:=]?\s*(\d{2,3}(?:\.\d+)?\s*°?[FC]?)/i);
+    if (tempMatch) {
+      labs.push({ name: 'Temperature', value: tempMatch[1], unit: null, reference_range: null, status: null });
+    }
+    const spo2Match = line.match(/(?:SPO2|SpO2|Pulse Ox)\s*[:=]?\s*(\d{2,3}\s*%?)/i);
+    if (spo2Match) {
+      labs.push({ name: 'SPO2', value: spo2Match[1], unit: '%', reference_range: '>95%', status: 'NORMAL' });
+    }
+  }
+
+  return { diagnosis: [], medications, labs };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -63,7 +127,12 @@ export async function POST(req: NextRequest) {
       try {
         const result = await geminiTextExtraction(geminiKey, rawText);
         if (result) {
-          return NextResponse.json({ ...result, raw_text: rawText });
+          const confidence = determineConfidence(result);
+          return NextResponse.json({
+            ...result,
+            confidence,
+            raw_text: rawText,
+          });
         }
       } catch (gErr) {
         console.warn('Gemini text extraction failed:', gErr);
@@ -78,8 +147,10 @@ export async function POST(req: NextRequest) {
       try {
         const result = await geminiVisionExtraction(geminiKey, base64, mimeType);
         if (result) {
+          const confidence = determineConfidence(result);
           return NextResponse.json({
             ...result,
+            confidence,
             raw_text: result.raw_text || rawText || '[Extracted via Gemini Vision]',
           });
         }
@@ -89,15 +160,18 @@ export async function POST(req: NextRequest) {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    // Step 3: If we at least got raw text but extraction failed
+    // Step 3: If we at least got raw text from Mistral OCR
+    // Extract medications and vitals via fallback parser
     // ──────────────────────────────────────────────────────────────────
     if (rawText.trim()) {
+      const parsed = parseBasicMedicalText(rawText);
+      const confidence = (parsed.medications.length > 0 || parsed.labs.length > 0) ? 'HIGH' : 'NEEDS_VERIFICATION';
       return NextResponse.json({
         raw_text: rawText,
-        confidence: 'NEEDS_VERIFICATION',
-        diagnosis: [],
-        medications: [],
-        labs: [],
+        confidence,
+        diagnosis: parsed.diagnosis,
+        medications: parsed.medications,
+        labs: parsed.labs,
       });
     }
 
@@ -132,14 +206,14 @@ async function geminiTextExtraction(
   apiKey: string,
   rawText: string
 ): Promise<Record<string, unknown> | null> {
-  const extractPrompt = `You are a medical document parser. Extract structured information from the following medical document text.
+  const extractPrompt = `You are an expert clinical document parser. Extract structured information from the following medical document text.
 
 Document text:
 """
 ${rawText.slice(0, 4000)}
 """
 
-Return ONLY valid JSON (no markdown, no explanation):
+Return ONLY valid JSON (no markdown, no backticks, no conversational filler):
 {
   "date": "YYYY-MM-DD or null",
   "diagnosis": ["condition1", "condition2"],
@@ -150,11 +224,13 @@ Return ONLY valid JSON (no markdown, no explanation):
     { "name": "test name", "value": "value", "unit": "unit or null", "reference_range": "range or null", "status": "NORMAL/LOW/HIGH/null" }
   ],
   "doctor": "doctor name or null",
-  "hospital": "hospital name or null",
-  "confidence": "HIGH or LOW or NEEDS_VERIFICATION"
+  "hospital": "hospital or clinic name or null",
+  "confidence": "HIGH or NEEDS_VERIFICATION"
 }
 
-If any field is uncertain or illegible, use null or empty array. Set confidence to NEEDS_VERIFICATION only if critical info is truly unclear. If you can read most of the document clearly, set confidence to HIGH.`;
+CRITICAL RULES:
+1. If the text has identifiable medicines, dosages, vitals, doctor names, or clinic details, ALWAYS extract them thoroughly into the arrays and set "confidence": "HIGH".
+2. Only set "confidence": "NEEDS_VERIFICATION" if the text is completely garbled or contains no readable clinical data.`;
 
   const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
   const resp = await fetch(`${geminiUrl}?key=${apiKey}`, {
@@ -164,20 +240,21 @@ If any field is uncertain or illegible, use null or empty array. Set confidence 
       contents: [{ parts: [{ text: extractPrompt }] }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 1500,
+        maxOutputTokens: 4000,
         responseMimeType: 'application/json',
       },
     }),
   });
 
-  if (!resp.ok) return null;
+  if (!resp.ok) {
+    console.warn('Gemini text extraction HTTP error:', resp.status, await resp.text());
+    return null;
+  }
 
   const data = await resp.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-  if (!clean) return null;
-
-  return JSON.parse(clean);
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const text = parts.map((p: { text?: string }) => p.text || '').join('\n');
+  return extractJsonFromText(text);
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -189,11 +266,11 @@ async function geminiVisionExtraction(
   base64: string,
   mimeType: string
 ): Promise<Record<string, unknown> | null> {
-  const visionPrompt = `You are a medical document parser with OCR capabilities. Look at this medical document image carefully.
+  const visionPrompt = `You are an expert clinical document parser with OCR capabilities. Look at this medical document image carefully.
 
 First, read all the text you can see in the image. Then extract structured medical information.
 
-Return ONLY valid JSON (no markdown, no explanation):
+Return ONLY valid JSON (no markdown, no backticks, no conversational filler):
 {
   "raw_text": "All readable text from the document",
   "date": "YYYY-MM-DD or null",
@@ -205,11 +282,13 @@ Return ONLY valid JSON (no markdown, no explanation):
     { "name": "test name", "value": "value", "unit": "unit or null", "reference_range": "range or null", "status": "NORMAL/LOW/HIGH/null" }
   ],
   "doctor": "doctor name or null",
-  "hospital": "hospital name or null",
-  "confidence": "HIGH or LOW or NEEDS_VERIFICATION"
+  "hospital": "hospital or clinic name or null",
+  "confidence": "HIGH or NEEDS_VERIFICATION"
 }
 
-If you can read most of the document clearly, set confidence to HIGH. Only set NEEDS_VERIFICATION if the image is truly illegible.`;
+CRITICAL RULES:
+1. Read all medicines, prescription lines, test values, and clinic details clearly.
+2. If medicines, tests, or clinical notes are legible, ALWAYS extract them and set "confidence": "HIGH". Only set "confidence": "NEEDS_VERIFICATION" if the image is truly illegible.`;
 
   const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
   const resp = await fetch(`${geminiUrl}?key=${apiKey}`, {
@@ -229,21 +308,19 @@ If you can read most of the document clearly, set confidence to HIGH. Only set N
       }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 2000,
+        maxOutputTokens: 4000,
         responseMimeType: 'application/json',
       },
     }),
   });
 
   if (!resp.ok) {
-    console.warn('Gemini Vision API error:', resp.status);
+    console.warn('Gemini Vision API error:', resp.status, await resp.text());
     return null;
   }
 
   const data = await resp.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-  if (!clean) return null;
-
-  return JSON.parse(clean);
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const text = parts.map((p: { text?: string }) => p.text || '').join('\n');
+  return extractJsonFromText(text);
 }

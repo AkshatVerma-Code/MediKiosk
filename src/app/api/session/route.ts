@@ -7,47 +7,106 @@ import { createServiceClient } from '@/lib/supabase';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { patient, clinicalState, messages, redFlags, documents, language, consultationType, consentGiven, summary } = body;
+    const {
+      sessionId: incomingSessionId,
+      patient,
+      clinicalState,
+      messages,
+      redFlags,
+      documents,
+      language,
+      consultationType,
+      consentGiven,
+      summary,
+    } = body;
 
     const supabase = createServiceClient();
 
     // 1. Upsert patient
-    const { data: patientRow, error: patientErr } = await supabase
-      .from('patients')
-      .upsert({
-        name: patient?.name || 'Unknown',
-        age: patient?.age ? parseInt(patient.age) : null,
-        gender: patient?.gender || 'other',
-        identity_reference: patient?.abhaId || null,
-      })
-      .select()
-      .single();
-
-    if (patientErr) {
-      console.error('Patient upsert error:', patientErr);
-      return NextResponse.json({ error: 'Failed to save patient' }, { status: 500 });
+    let patientRow = null;
+    if (patient?.id) {
+      const { data: pExisting } = await supabase
+        .from('patients')
+        .select('*')
+        .eq('id', patient.id)
+        .single();
+      if (pExisting) patientRow = pExisting;
     }
 
-    // 2. Create consultation session
-    const { data: sessionRow, error: sessionErr } = await supabase
-      .from('consultation_sessions')
-      .insert({
-        patient_id: patientRow.id,
-        consultation_type: consultationType || 'general',
-        language: language || 'hi',
-        status: 'complete',
-        consent_given: consentGiven || false,
-        completed_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
+    if (!patientRow) {
+      const { data: pNew, error: patientErr } = await supabase
+        .from('patients')
+        .upsert({
+          name: patient?.name || 'Unknown',
+          age: patient?.age ? parseInt(patient.age) : null,
+          gender: patient?.gender || 'other',
+          identity_reference: patient?.abhaId || null,
+        })
+        .select()
+        .single();
 
-    if (sessionErr) {
-      console.error('Session insert error:', sessionErr);
-      return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
+      if (patientErr) {
+        console.error('Patient upsert error:', patientErr);
+        return NextResponse.json({ error: 'Failed to save patient' }, { status: 500 });
+      }
+      patientRow = pNew;
     }
 
-    const sessionId = sessionRow.id;
+    // 2. Find or create consultation session
+    let sessionId = incomingSessionId;
+    let isExistingSession = false;
+
+    if (sessionId) {
+      const { data: existing } = await supabase
+        .from('consultation_sessions')
+        .select('id')
+        .eq('id', sessionId)
+        .single();
+      if (existing) {
+        isExistingSession = true;
+      }
+    }
+
+    if (isExistingSession && sessionId) {
+      await supabase
+        .from('consultation_sessions')
+        .update({
+          patient_id: patientRow.id,
+          consultation_type: consultationType || 'general',
+          language: language || 'hi',
+          status: 'complete',
+          consent_given: consentGiven || false,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', sessionId);
+
+      // Clean up previous child records to prevent duplicate rows
+      await supabase.from('extracted_medical_data').delete().eq('session_id', sessionId);
+      await supabase.from('documents').delete().eq('session_id', sessionId);
+      await supabase.from('summaries').delete().eq('session_id', sessionId);
+      await supabase.from('conversation_messages').delete().eq('session_id', sessionId);
+      await supabase.from('red_flags').delete().eq('session_id', sessionId);
+    } else {
+      const { data: sessionRow, error: sessionErr } = await supabase
+        .from('consultation_sessions')
+        .insert({
+          ...(sessionId ? { id: sessionId } : {}),
+          patient_id: patientRow.id,
+          consultation_type: consultationType || 'general',
+          language: language || 'hi',
+          status: 'complete',
+          consent_given: consentGiven || false,
+          completed_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (sessionErr) {
+        console.error('Session insert error:', sessionErr);
+        return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
+      }
+      sessionId = sessionRow.id;
+    }
 
     // 3. Save clinical state
     await supabase.from('clinical_state').upsert({

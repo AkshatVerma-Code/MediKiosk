@@ -24,7 +24,8 @@ import {
   ChevronDown,
   ChevronUp,
   Save,
-  Info
+  Info,
+  RotateCcw
 } from 'lucide-react';
 import styles from './page.module.css';
 
@@ -139,6 +140,7 @@ export default function DoctorDashboardPage() {
   // Document OCR collapsible state & copy state
   const [expandedOcrDocId, setExpandedOcrDocId] = useState<string | null>(null);
   const [copiedDocId, setCopiedDocId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // ─── Auth guard ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -161,8 +163,8 @@ export default function DoctorDashboardPage() {
   }, [router]);
 
   // ─── Fetch patient list ───────────────────────────────────────────────
-  const fetchPatients = useCallback(async (query: string) => {
-    setListLoading(true);
+  const fetchPatients = useCallback(async (query: string, silent = false) => {
+    if (!silent) setListLoading(true);
     try {
       const url = `/api/doctor/patients${query ? `?search=${encodeURIComponent(query)}` : ''}`;
       const resp = await fetch(url);
@@ -173,13 +175,43 @@ export default function DoctorDashboardPage() {
     } catch (err) {
       console.error('Failed to fetch patients:', err);
     } finally {
-      setListLoading(false);
+      if (!silent) setListLoading(false);
     }
   }, []);
+
+  const refreshPatientDetail = useCallback(async (sessionId: string) => {
+    try {
+      const resp = await fetch(`/api/doctor/patient/${sessionId}`);
+      if (resp.ok) {
+        const data: PatientDetail = await resp.json();
+        setDetail(data);
+      }
+    } catch (err) {
+      console.error('Failed to refresh patient detail:', err);
+    }
+  }, []);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchPatients(search, true);
+    if (selectedSessionId) {
+      await refreshPatientDetail(selectedSessionId);
+    }
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
 
   useEffect(() => {
     if (doctorId) {
       fetchPatients(search);
+
+      // Live sync every 8s when window is visible so kiosk submissions appear immediately
+      const timer = setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          fetchPatients(search, true);
+        }
+      }, 8000);
+
+      return () => clearInterval(timer);
     }
   }, [doctorId, fetchPatients, search]);
 
@@ -442,6 +474,16 @@ export default function DoctorDashboardPage() {
                       <span>Mark as Diagnosed</span>
                     </button>
                   )}
+
+                  <button
+                    className={styles.refreshQueueBtn}
+                    style={{ background: '#ffffff', border: '1px solid #d5ddd6', height: 38 }}
+                    onClick={handleManualRefresh}
+                    title="Refresh patient record and documents"
+                  >
+                    <RotateCcw size={14} className={isRefreshing ? styles.spinIcon : ''} />
+                    <span>{isRefreshing ? 'Syncing...' : 'Sync Record'}</span>
+                  </button>
                 </div>
               </div>
             </section>
@@ -1263,6 +1305,22 @@ export default function DoctorDashboardPage() {
                 </button>
               )}
             </div>
+
+            {/* Live Sync Badge */}
+            <div className={styles.liveBadge} title="Real-time queue sync active">
+              <span className={styles.livePulseDot} />
+              <span>Live Sync</span>
+            </div>
+
+            {/* Manual Sync Button */}
+            <button
+              className={styles.refreshQueueBtn}
+              onClick={handleManualRefresh}
+              title="Sync and refresh patient queue"
+            >
+              <RotateCcw size={14} className={isRefreshing ? styles.spinIcon : ''} />
+              <span>{isRefreshing ? 'Syncing...' : 'Sync'}</span>
+            </button>
           </div>
         </div>
       </div>

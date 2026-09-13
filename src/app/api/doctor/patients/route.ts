@@ -12,12 +12,13 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get('search')?.toLowerCase() || '';
 
-    // Get today's date range (UTC)
+    // Fetch consultation sessions from the last 24 hours or today,
+    // ensuring timezone offsets between local kiosk and server never hide active patients
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayISO = today.toISOString();
+    const sinceTime = new Date(Math.min(today.getTime(), Date.now() - 24 * 60 * 60 * 1000)).toISOString();
 
-    // Fetch consultation sessions from today, joining patients and summaries
+    // Fetch consultation sessions, joining patients and summaries
     let query = supabase
       .from('consultation_sessions')
       .select(`
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
           status
         )
       `)
-      .gte('created_at', todayISO)
+      .gte('created_at', sinceTime)
       .order('created_at', { ascending: false });
 
     const { data: sessions, error } = await query;

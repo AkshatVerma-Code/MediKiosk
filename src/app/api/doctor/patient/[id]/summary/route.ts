@@ -6,7 +6,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   try {
     const sessionId = params.id;
     const body = await req.json();
-    const { summary_json, status } = body;
+    const { summary_json, status, doctor_notes } = body;
 
     const supabase = createServiceClient();
     
@@ -14,6 +14,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const updates: Record<string, unknown> = {};
     if (summary_json !== undefined) updates.summary_json = summary_json;
     if (status !== undefined) updates.status = status;
+    if (doctor_notes !== undefined) updates.doctor_notes = doctor_notes;
     
     if (Object.keys(updates).length > 0) {
       if (status === 'accepted') {

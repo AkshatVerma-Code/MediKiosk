@@ -1,22 +1,20 @@
 /* src/app/doctor/page.module.css */
-/* Modern, hospital-grade clinical workstation theme */
+/* MediKiosk Doctor Portal — Premium Clinical Workstation Theme */
 
 .main {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background: #f8faf9;
+  background: #f7f9f7;
   color: var(--text-primary);
   font-family: var(--font-base);
 }
 
-/* ─── Dashboard Header ─────────────────────────────────────────────── */
+/* ─── Global Workstation Header ─────────────────────────────────────── */
 .dashHeader {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #ffffff;
   border-bottom: 1px solid #e5eae6;
-  padding: 16px 28px;
+  padding: 12px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -24,26 +22,26 @@
   gap: 16px;
   position: sticky;
   top: 0;
-  z-index: 20;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  z-index: 30;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .brandGroup {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .stethoscopeBadge {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   background: linear-gradient(135deg, var(--green-500), var(--green-700));
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(45, 122, 58, 0.25);
+  box-shadow: 0 2px 8px rgba(45, 122, 58, 0.2);
   flex-shrink: 0;
 }
 
@@ -54,18 +52,18 @@
 }
 
 .headerTitle {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 800;
   color: var(--text-primary);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .headerSub {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
   display: flex;
   align-items: center;
@@ -79,9 +77,9 @@
   gap: 6px;
   background: #edf7ef;
   color: var(--green-800);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
   border-radius: 9999px;
   border: 1px solid var(--green-200);
 }
@@ -91,22 +89,21 @@
   height: 6px;
   border-radius: 50%;
   background: #10b981;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
 }
 
 .logoutBtn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: #ffffff;
   border: 1px solid #d5ddd6;
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 10px;
+  padding: 7px 14px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   font-family: var(--font-base);
 }
 
@@ -114,24 +111,21 @@
   background: #fef2f2;
   border-color: #fca5a5;
   color: #dc2626;
-  transform: translateY(-1px);
 }
 
 /* ─── Detail Header ────────────────────────────────────────────────── */
 .detailHeader {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #ffffff;
   border-bottom: 1px solid #e5eae6;
-  padding: 14px 28px;
+  padding: 12px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   position: sticky;
   top: 0;
-  z-index: 20;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  z-index: 30;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .backBtn {
@@ -141,27 +135,31 @@
   background: #ffffff;
   border: 1px solid #d5ddd6;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 10px;
+  padding: 7px 14px;
+  border-radius: 8px;
   cursor: pointer;
   font-family: var(--font-base);
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .backBtn:hover {
   background: #f0faf1;
   border-color: var(--green-400);
   color: var(--green-700);
-  transform: translateX(-2px);
 }
 
-/* ─── Dashboard Navigation & Search Bar ────────────────────────────── */
-.controlBar {
+/* ─── Triage Queue Action Bar ──────────────────────────────────────── */
+.queueControlBar {
   background: #ffffff;
   border-bottom: 1px solid #e5eae6;
-  padding: 14px 28px;
+  padding: 16px 32px;
+}
+
+.queueControlInner {
+  max-width: 1360px;
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -169,26 +167,67 @@
   gap: 16px;
 }
 
+.queueMetaSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.queueHeading {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.queueCountsLine {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.countHighlight {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.urgentCountHighlight {
+  font-weight: 700;
+  color: #b91c1c;
+}
+
+.queueRightActions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
 .tabPills {
   display: inline-flex;
   align-items: center;
   background: #eef3ef;
   padding: 4px;
-  border-radius: 12px;
+  border-radius: 10px;
   gap: 4px;
 }
 
 .tabPill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 18px;
+  gap: 7px;
+  padding: 7px 16px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
   background: transparent;
   border: none;
-  border-radius: 8px;
+  border-radius: 7px;
   cursor: pointer;
   transition: all 0.15s ease;
   font-family: var(--font-base);
@@ -207,7 +246,7 @@
 .pillBadge {
   font-size: 11px;
   font-weight: 700;
-  padding: 2px 7px;
+  padding: 1px 6px;
   border-radius: 9999px;
   background: rgba(0, 0, 0, 0.06);
   color: inherit;
@@ -221,14 +260,12 @@
 .searchWrap {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: #f8faf8;
   border: 1px solid #d5ddd6;
   border-radius: 10px;
-  padding: 6px 14px;
-  min-width: 320px;
-  max-width: 480px;
-  flex: 1;
+  padding: 7px 12px;
+  width: 320px;
   transition: all 0.2s ease;
 }
 
@@ -247,11 +284,11 @@
   flex: 1;
   border: none;
   outline: none;
-  font-size: 14px;
+  font-size: 13px;
   font-family: var(--font-base);
   color: var(--text-primary);
   background: transparent;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .searchInput::placeholder {
@@ -261,8 +298,8 @@
 .searchClear {
   background: #e5eae6;
   border: none;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -278,92 +315,69 @@
   color: var(--text-primary);
 }
 
-/* ─── Cards Container ──────────────────────────────────────────────── */
+/* ─── Cards Grid Container ─────────────────────────────────────────── */
 .cardsContainer {
   flex: 1;
-  padding: 28px;
-  overflow-y: auto;
-  max-width: 1400px;
+  padding: 28px 32px;
+  max-width: 1360px;
   width: 100%;
   margin: 0 auto;
 }
 
-.sectionHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.sectionTitle {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
 .cardsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
 }
 
-/* ─── Patient Card ─────────────────────────────────────────────────── */
+/* ─── Clinical Queue Patient Card ──────────────────────────────────── */
 .patientCard {
   background: #ffffff;
   border: 1px solid #e5eae6;
-  border-radius: 16px;
-  padding: 20px;
+  border-radius: 14px;
+  padding: 18px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  overflow: hidden;
+  transition: all 0.18s ease;
   font-family: var(--font-base);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
   display: flex;
   flex-direction: column;
-  position: relative;
 }
 
 .patientCard:hover {
-  border-color: var(--green-300);
-  box-shadow: 0 10px 24px -4px rgba(45, 122, 58, 0.12), 0 4px 8px -2px rgba(0, 0, 0, 0.04);
-  transform: translateY(-3px);
+  border-color: var(--green-400);
+  box-shadow: 0 6px 18px rgba(45, 122, 58, 0.1);
+  transform: translateY(-2px);
 }
 
 .cardTop {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .cardAvatar {
-  width: 44px;
-  height: 44px;
-  background: linear-gradient(135deg, #34d399, #059669);
-  border-radius: 12px;
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(135deg, var(--green-400), var(--green-600));
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
-  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.2);
   flex-shrink: 0;
 }
 
-/* Priority Badges */
 .priorityBadge {
   font-size: 11px;
   font-weight: 700;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 9999px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   display: inline-flex;
   align-items: center;
@@ -386,12 +400,13 @@
   background: #fef2f2;
   color: #b91c1c;
   border: 1px solid #fecaca;
-  animation: pulseGentle 2s infinite ease-in-out;
 }
 
-@keyframes pulseGentle {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.85; }
+.urgentDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #b91c1c;
 }
 
 .cardBody {
@@ -399,11 +414,10 @@
 }
 
 .cardName {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 6px 0;
-  line-height: 1.3;
+  margin: 0 0 4px 0;
 }
 
 .cardMeta {
@@ -415,14 +429,28 @@
   font-weight: 500;
 }
 
+.cardAlertTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
 .cardAbha {
   font-size: 11px;
   color: var(--green-800);
   background: #edf7ef;
   border: 1px solid var(--green-200);
-  padding: 3px 8px;
+  padding: 2px 6px;
   border-radius: 6px;
-  margin-top: 10px;
+  margin-top: 8px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -434,8 +462,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 16px;
-  padding-top: 14px;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid #f0f4f1;
 }
 
@@ -451,7 +479,7 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: 9999px;
   background: #f1f4f1;
   display: inline-flex;
@@ -464,16 +492,15 @@
   background: #d1fae5;
 }
 
-/* ─── Detail View: Patient Bar ──────────────────────────────────────── */
+/* ─── Detail View: Patient Identity Header ─────────────────────────── */
 .patientHero {
   background: #ffffff;
   border-bottom: 1px solid #e5eae6;
-  padding: 24px 28px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  padding: 20px 32px;
 }
 
 .heroContent {
-  max-width: 1000px;
+  max-width: 1080px;
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -489,18 +516,18 @@
 }
 
 .heroAvatar {
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   background: linear-gradient(135deg, var(--green-500), var(--green-700));
-  border-radius: 16px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  box-shadow: 0 4px 12px rgba(45, 122, 58, 0.25);
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(45, 122, 58, 0.2);
 }
 
 .heroInfo {
@@ -514,11 +541,10 @@
   font-weight: 800;
   color: var(--text-primary);
   margin: 0;
-  letter-spacing: -0.01em;
 }
 
 .heroMeta {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-muted);
   display: flex;
   align-items: center;
@@ -530,22 +556,7 @@
 .heroActions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 12px;
-}
-
-.redFlagAlert {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 700;
-  box-shadow: 0 1px 2px rgba(185, 28, 28, 0.05);
 }
 
 .diagnosedPill {
@@ -556,8 +567,8 @@
   color: #047857;
   border: 1px solid #a7f3d0;
   padding: 8px 16px;
-  border-radius: 10px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -565,34 +576,32 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, var(--green-500), var(--green-600));
+  background: var(--green-600);
   color: #ffffff;
   border: none;
-  padding: 10px 20px;
-  border-radius: 10px;
-  font-size: 14px;
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(45, 122, 58, 0.25);
+  transition: all 0.15s ease;
   font-family: var(--font-base);
+  box-shadow: 0 2px 6px rgba(45, 122, 58, 0.2);
 }
 
 .diagnoseBtn:hover {
-  background: linear-gradient(135deg, var(--green-600), var(--green-700));
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(45, 122, 58, 0.35);
+  background: var(--green-700);
 }
 
 /* ─── Detail Tabs ──────────────────────────────────────────────────── */
 .detailTabsBar {
   background: #ffffff;
   border-bottom: 1px solid #e5eae6;
-  padding: 0 28px;
+  padding: 0 32px;
 }
 
 .detailTabs {
-  max-width: 1000px;
+  max-width: 1080px;
   margin: 0 auto;
   display: flex;
   gap: 8px;
@@ -602,8 +611,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 20px;
-  font-size: 14px;
+  padding: 13px 18px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
   background: transparent;
@@ -620,67 +629,211 @@
 }
 
 .detailTabActive {
-  color: var(--green-600);
+  color: var(--green-700);
   border-bottom-color: var(--green-500);
   font-weight: 700;
 }
 
-/* ─── Detail Content ───────────────────────────────────────────────── */
+/* ─── Detail Content Sheet ─────────────────────────────────────────── */
 .detailContent {
   flex: 1;
-  padding: 28px;
-  overflow-y: auto;
-  max-width: 1000px;
+  padding: 24px 32px;
+  max-width: 1080px;
   width: 100%;
   margin: 0 auto;
 }
 
-/* ─── Modern Card ──────────────────────────────────────────────────── */
-.card {
+/* ─── Clinical Disclaimer Banner ───────────────────────────────────── */
+.aiDisclaimerBanner {
+  background: #f0faf1;
+  border: 1px solid #cce8d0;
+  border-radius: 12px;
+  padding: 12px 18px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.disclaimerIcon {
+  color: var(--green-600);
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.disclaimerText {
+  font-size: 12px;
+  color: var(--green-900);
+  line-height: 1.5;
+}
+
+.disclaimerTitle {
+  font-weight: 700;
+  display: block;
+  margin-bottom: 1px;
+  font-size: 13px;
+}
+
+/* ─── Clinical Section Cards ───────────────────────────────────────── */
+.clinicalCard {
   background: #ffffff;
   border: 1px solid #e5eae6;
-  border-radius: 16px;
+  border-radius: 14px;
+  margin-bottom: 18px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 2px 8px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
-/* ─── Summary Tab Rows ─────────────────────────────────────────────── */
-.summaryRow {
-  display: grid;
-  grid-template-columns: 210px 1fr 50px;
-  align-items: start;
-  padding: 16px 24px;
+.clinicalCardHeader {
+  padding: 14px 20px;
+  background: #fafbfa;
   border-bottom: 1px solid #f0f4f1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cardHeaderTitle {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cardHeaderBadge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #edf7ef;
+  color: var(--green-800);
+  border: 1px solid var(--green-200);
+}
+
+.doctorEnteredBadge {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.clinicalCardBody {
+  padding: 18px 20px;
+}
+
+/* ─── Two-Column Clinical Grid for Red Flags / Priority ─────────────── */
+.triageStatsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
-  transition: background 0.15s ease;
 }
 
-.summaryRow:hover {
-  background: #fbfdfb;
+.triageStatItem {
+  background: #fafbfa;
+  border: 1px solid #f0f4f1;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.summaryRow:last-child {
-  border-bottom: none;
+.statItemLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
 }
 
-.summaryKey {
+.statItemValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.redFlagAlertPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  padding: 4px 10px;
+  border-radius: 6px;
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-muted);
-  text-transform: capitalize;
-  padding-top: 4px;
-  letter-spacing: 0.02em;
 }
 
-.summaryValue {
-  font-size: 15px;
+.noRedFlagPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ─── Structured Item Rows with Edit Action ────────────────────────── */
+.clinicalItemRow {
+  padding: 14px 0;
+  border-bottom: 1px solid #f0f4f1;
+  display: grid;
+  grid-template-columns: 190px 1fr auto;
+  align-items: start;
+  gap: 16px;
+}
+
+.clinicalItemRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.clinicalItemRow:first-child {
+  padding-top: 0;
+}
+
+.itemLabelGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 3px;
+}
+
+.itemLabel {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.sourceLabel {
+  font-size: 11px;
+  color: #8fa08f;
+  font-weight: 500;
+}
+
+.itemValue {
+  font-size: 14px;
   color: var(--text-primary);
   line-height: 1.6;
+}
+
+.chipsWrap {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  align-items: flex-start;
-  min-height: 28px;
 }
 
 .clinicalChip {
@@ -690,237 +843,16 @@
   color: var(--green-900);
   border: 1px solid var(--green-200);
   padding: 4px 10px;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
 }
 
-.editActions {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: flex-end;
-  padding-top: 2px;
-}
-
 .editBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-muted);
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.editBtn:hover {
-  background: #f0faf1;
-  border-color: var(--green-200);
-  color: var(--green-700);
-}
-
-.saveBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--green-500);
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.saveBtn:hover {
-  background: var(--green-600);
-}
-
-.cancelBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: #f1f4f1;
-  color: var(--text-secondary);
-  border: none;
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.cancelBtn:hover {
-  background: #e4e8e4;
-}
-
-.editTextarea {
-  width: 100%;
-  min-height: 70px;
-  padding: 10px 14px;
-  border: 2px solid var(--green-400);
-  border-radius: 10px;
-  font-family: var(--font-base);
-  font-size: 14px;
-  line-height: 1.5;
-  resize: vertical;
-  outline: none;
-  background: #ffffff;
-  color: var(--text-primary);
-  box-shadow: 0 0 0 3px rgba(45, 122, 58, 0.1);
-}
-
-/* ─── History Tab ──────────────────────────────────────────────────── */
-.historyGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
-}
-
-.historyItem {
-  padding: 18px 24px;
-  border-bottom: 1px solid #f0f4f1;
-  border-right: 1px solid #f0f4f1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  transition: background 0.15s ease;
-}
-
-.historyItem:hover {
-  background: #fbfdfb;
-}
-
-.historyItem:nth-child(even) {
-  border-right: none;
-}
-
-.historyLabel {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-}
-
-.historyValue {
-  font-size: 15px;
-  color: var(--text-primary);
-  font-weight: 600;
-  line-height: 1.5;
-}
-
-/* ─── Documents Tab ────────────────────────────────────────────────── */
-.docCard {
-  background: #ffffff;
-  border: 1px solid #e5eae6;
-  border-radius: 16px;
-  margin-bottom: 20px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-}
-
-.docHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 24px;
-  border-bottom: 1px solid #f0f4f1;
-  background: #f8faf8;
-}
-
-.docHeaderTitle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.confBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.confHigh {
-  background: #ecfdf5;
-  color: #047857;
-  border: 1px solid #a7f3d0;
-}
-
-.confVerify {
-  background: #fffbeb;
-  color: #b45309;
-  border: 1px solid #fde68a;
-}
-
-.docBody {
-  padding: 20px 24px;
-}
-
-.structuredItem {
-  margin-bottom: 12px;
-}
-
-.structuredLabel {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  display: block;
-  margin-bottom: 4px;
-}
-
-.structuredValue {
-  font-size: 14px;
-  color: var(--text-primary);
-}
-
-.ocrTerminal {
-  margin-top: 20px;
-  border-top: 1px solid #e5eae6;
-  padding-top: 18px;
-}
-
-.ocrTerminalHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.ocrTerminalTitle {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.copyBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #f1f4f1;
   border: 1px solid #d5ddd6;
   color: var(--text-secondary);
   font-size: 12px;
@@ -932,6 +864,281 @@
   font-family: var(--font-base);
 }
 
+.editBtn:hover {
+  background: #f0faf1;
+  border-color: var(--green-400);
+  color: var(--green-700);
+}
+
+.editTextarea {
+  width: 100%;
+  min-height: 70px;
+  padding: 10px 12px;
+  border: 2px solid var(--green-500);
+  border-radius: 8px;
+  font-family: var(--font-base);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  background: #ffffff;
+  color: var(--text-primary);
+  box-shadow: 0 0 0 3px rgba(45, 122, 58, 0.1);
+}
+
+.editActionsGroup {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.saveBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--green-600);
+  color: white;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-base);
+}
+
+.saveBtn:hover {
+  background: var(--green-700);
+}
+
+.cancelBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f4f1;
+  color: var(--text-secondary);
+  border: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-base);
+}
+
+.cancelBtn:hover {
+  background: #e4e8e4;
+}
+
+/* ─── Doctor Notes Box ─────────────────────────────────────────────── */
+.notesTextarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px 14px;
+  border: 1px solid #d5ddd6;
+  border-radius: 8px;
+  font-family: var(--font-base);
+  font-size: 13px;
+  line-height: 1.5;
+  outline: none;
+  color: var(--text-primary);
+  background: #fafbfa;
+  transition: all 0.15s ease;
+  resize: vertical;
+}
+
+.notesTextarea:focus {
+  background: #ffffff;
+  border-color: var(--green-500);
+  box-shadow: 0 0 0 3px rgba(45, 122, 58, 0.1);
+}
+
+.notesActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+/* ─── Case History Grid ────────────────────────────────────────────── */
+.historyCardGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.historyCell {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f4f1;
+  border-right: 1px solid #f0f4f1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.historyCell:nth-child(even) {
+  border-right: none;
+}
+
+.historyCellLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.historyCellValue {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ─── Documents Tab ────────────────────────────────────────────────── */
+.docCard {
+  background: #ffffff;
+  border: 1px solid #e5eae6;
+  border-radius: 14px;
+  margin-bottom: 18px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.docHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f4f1;
+  background: #fafbfa;
+}
+
+.docHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.docHeaderTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.docDate {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.confBadgeVerified {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  text-transform: uppercase;
+}
+
+.confBadgeVerify {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  text-transform: uppercase;
+}
+
+.docCardBody {
+  padding: 18px 20px;
+}
+
+.extractedSection {
+  margin-bottom: 14px;
+}
+
+.extractedSection:last-child {
+  margin-bottom: 0;
+}
+
+.extractedLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  display: block;
+}
+
+.ocrToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8faf8;
+  border: 1px solid #d5ddd6;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 14px;
+  transition: all 0.15s ease;
+  font-family: var(--font-base);
+}
+
+.ocrToggleBtn:hover {
+  background: #edf7ef;
+  border-color: var(--green-300);
+  color: var(--green-800);
+}
+
+.ocrExpandedBox {
+  margin-top: 12px;
+  border-top: 1px solid #e5eae6;
+  padding-top: 12px;
+}
+
+.ocrHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ocrTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.copyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f1f4f1;
+  border: 1px solid #d5ddd6;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-base);
+}
+
 .copyBtn:hover {
   background: #e4e8e4;
   color: var(--text-primary);
@@ -940,15 +1147,15 @@
 .ocrPre {
   white-space: pre-wrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.6;
   color: #2d3748;
-  background: #f8faf9;
+  background: #fafbfa;
   border: 1px solid #e2e8f0;
-  padding: 16px;
-  border-radius: 10px;
+  padding: 14px;
+  border-radius: 8px;
   margin: 0;
-  max-height: 360px;
+  max-height: 300px;
   overflow-y: auto;
 }
 
@@ -958,11 +1165,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  padding: 100px 24px;
+  gap: 14px;
+  padding: 80px 24px;
   color: var(--text-muted);
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 15px;
 }
 
 .emptyState {
@@ -971,54 +1177,62 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 90px 24px;
+  padding: 80px 24px;
   background: #ffffff;
   border: 1px dashed #d5ddd6;
-  border-radius: 16px;
+  border-radius: 14px;
 }
 
 .emptyIconCircle {
-  width: 72px;
-  height: 72px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   background: #edf7ef;
   color: var(--green-600);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .emptyState h3 {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 6px 0;
+  margin: 0 0 4px 0;
 }
 
 .emptyState p {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-muted);
-  max-width: 420px;
+  max-width: 400px;
   margin: 0;
   line-height: 1.5;
 }
 
 .emptyDash {
   color: #a0aec0;
-  font-weight: 500;
 }
 
 /* ─── Responsive ───────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .dashHeader, .detailHeader, .controlBar, .patientHero, .detailTabsBar, .cardsContainer, .detailContent {
+  .dashHeader, .detailHeader, .queueControlBar, .patientHero, .detailTabsBar, .cardsContainer, .detailContent {
     padding-left: 16px;
     padding-right: 16px;
   }
 
-  .controlBar {
+  .queueControlInner {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .queueRightActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .searchWrap {
+    width: 100%;
   }
 
   .tabPills {
@@ -1030,12 +1244,25 @@
     justify-content: center;
   }
 
-  .searchWrap {
-    min-width: 100%;
-  }
-
   .cardsGrid {
     grid-template-columns: 1fr;
+  }
+
+  .triageStatsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .clinicalItemRow {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .historyCardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .historyCell {
+    border-right: none;
   }
 
   .heroContent {
@@ -1045,23 +1272,6 @@
 
   .heroActions {
     width: 100%;
-    justify-content: space-between;
-  }
-
-  .summaryRow {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .editActions {
     justify-content: flex-start;
-  }
-
-  .historyGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .historyItem {
-    border-right: none;
   }
 }

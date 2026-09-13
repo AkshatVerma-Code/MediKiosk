@@ -39,7 +39,7 @@ export default function LanguagePage() {
         }}
       />
 
-      <main className="page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100dvh - 60px)' }}>
+      <main id="main-content" tabIndex={-1} className="page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100dvh - 60px)' }}>
         <div className={`${styles.card} animate-fade-in-up`}>
           {/* Top Icon */}
           <div className={styles.iconWrap}>

@@ -81,7 +81,7 @@ export default function SelectPage() {
         onFontChange={(s) => updateSession({ fontScale: s })}
       />
 
-      <main className="page-content" style={{ minHeight: 'calc(100dvh - 60px)' }}>
+      <main id="main-content" tabIndex={-1} className="page-content" style={{ minHeight: 'calc(100dvh - 60px)' }}>
         {/* Patient greeting */}
         {session.patient && (
           <div className={`${styles.greeting} animate-fade-in`}>

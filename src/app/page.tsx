@@ -27,7 +27,7 @@ export default function LandingPage() {
   };
 
   return (
-    <main className={styles.landing}>
+    <main id="main-content" tabIndex={-1} className={styles.landing}>
       <div className={styles.blob1} />
       <div className={styles.blob2} />
       <div className={styles.blob3} />

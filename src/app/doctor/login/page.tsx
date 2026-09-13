@@ -37,7 +37,7 @@ export default function DoctorLoginPage() {
   };
 
   return (
-    <main className={styles.loginPage}>
+    <main id="main-content" tabIndex={-1} className={styles.loginPage}>
       {/* Background decorations */}
       <div className={styles.blob1} />
       <div className={styles.blob2} />

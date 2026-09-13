@@ -474,7 +474,7 @@ export default function DoctorDashboardPage() {
             </div>
 
             {/* Tab content */}
-            <div className={styles.detailContent}>
+            <main id="main-content" tabIndex={-1} className={styles.detailContent}>
               {/* ─── SUMMARY TAB ────────────────────────────────────────── */}
               {activeTab === 'summary' && (
                 <div className="animate-fade-in">
@@ -1142,7 +1142,7 @@ export default function DoctorDashboardPage() {
                   )}
                 </div>
               )}
-            </div>
+            </main>
           </>
         ) : (
           <div className={styles.emptyState} style={{ margin: 28 }}>
@@ -1268,7 +1268,7 @@ export default function DoctorDashboardPage() {
       </div>
 
       {/* Patient Cards Container */}
-      <main className={styles.cardsContainer}>
+      <main id="main-content" tabIndex={-1} className={styles.cardsContainer}>
         {listLoading ? (
           <div className={styles.loadingWrap}>
             <div className="spinner" style={{ width: 44, height: 44, borderWidth: 3 }} />

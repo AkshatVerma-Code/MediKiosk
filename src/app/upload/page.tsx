@@ -122,7 +122,7 @@ export default function UploadPage() {
         onFontChange={(s) => updateSession({ fontScale: s })}
       />
 
-      <main className="page-content">
+      <main id="main-content" tabIndex={-1} className="page-content">
         <div className="animate-fade-in-up" style={{ maxWidth: 640, margin: '0 auto' }}>
           {/* Header */}
           <div className={styles.header}>

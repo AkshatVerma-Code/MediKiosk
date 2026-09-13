@@ -864,7 +864,7 @@ function CaseTakingContent() {
         onFontChange={(s) => updateSession({ fontScale: s })}
       />
 
-      <main className={styles.main}>
+      <main id="main-content" tabIndex={-1} className={styles.main}>
         {/* Top bar */}
         <div className={styles.topBar}>
           <div>

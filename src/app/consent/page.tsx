@@ -100,7 +100,7 @@ export default function ConsentPage() {
         onFontChange={(s) => updateSession({ fontScale: s })}
       />
 
-      <main className="page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100dvh - 60px)', padding: '32px 24px' }}>
+      <main id="main-content" tabIndex={-1} className="page-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100dvh - 60px)', padding: '32px 24px' }}>
         <div className={`${styles.card} animate-scale-in`}>
           {/* Header Shield */}
           <div className={styles.shieldWrap}>

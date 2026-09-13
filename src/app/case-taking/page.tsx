@@ -412,12 +412,10 @@ function CaseTakingContent() {
         }
       } catch {}
 
-      if (chosenMime.includes('mp4') || chosenMime.includes('aac')) {
-        // Safari corrupts MP4/AAC files if timeslice is used
-        recorder.start(); 
-      } else {
-        recorder.start(250); // Continually buffer chunks every 250ms for WebM
-      }
+      // We record as a single continuous block. Using timeslice (e.g., start(250)) 
+      // can cause chunk stitching issues or missing EBML headers in some browsers (like Brave on Mac), 
+      // causing the STT API to reject the file as corrupt.
+      recorder.start();
       setInputMode('listening');
       startSilenceWatch(stream);
     } catch {

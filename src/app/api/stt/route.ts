@@ -33,8 +33,10 @@ export async function POST(req: NextRequest) {
     }
 
     const sarvamFormData = new FormData();
-    sarvamFormData.append('file', audioFile, filename);
-    sarvamFormData.append('model', 'saarika:v2.5');
+    const arrayBuffer = await audioFile.arrayBuffer();
+    const safeBlob = new Blob([arrayBuffer], { type: mimeType || 'audio/webm' });
+    sarvamFormData.append('file', safeBlob, filename);
+    sarvamFormData.append('model', 'saaras:v3'); // Upgrade to latest Sarvam STT model
     sarvamFormData.append('language_code', languageCode);
     sarvamFormData.append('with_timestamps', 'false');
 

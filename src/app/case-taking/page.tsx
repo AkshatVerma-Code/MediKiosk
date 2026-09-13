@@ -412,7 +412,12 @@ function CaseTakingContent() {
         }
       } catch {}
 
-      recorder.start(250); // Continually buffer chunks every 250ms
+      if (chosenMime.includes('mp4') || chosenMime.includes('aac')) {
+        // Safari corrupts MP4/AAC files if timeslice is used
+        recorder.start(); 
+      } else {
+        recorder.start(250); // Continually buffer chunks every 250ms for WebM
+      }
       setInputMode('listening');
       startSilenceWatch(stream);
     } catch {
